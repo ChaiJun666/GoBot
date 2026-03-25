@@ -15,8 +15,10 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     backend_host: str = "127.0.0.1"
     backend_port: int = 8000
+    serve_frontend: bool = True
 
     scraper_database_path: Path = Field(default=Path("data/app.db"))
+    frontend_dist_path: Path = Field(default=Path("../frontend/dist"))
     scraper_headless: bool = True
     scraper_timeout_ms: int = 60_000
     scraper_scroll_pause_ms: int = 2_000
@@ -38,6 +40,12 @@ class Settings(BaseSettings):
         if self.scraper_database_path.is_absolute():
             return self.scraper_database_path
         return BACKEND_DIR / self.scraper_database_path
+
+    @property
+    def resolved_frontend_dist_path(self) -> Path:
+        if self.frontend_dist_path.is_absolute():
+            return self.frontend_dist_path
+        return BACKEND_DIR / self.frontend_dist_path
 
 
 @lru_cache(maxsize=1)

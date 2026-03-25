@@ -28,6 +28,10 @@ GoBot/
 |   |-- tests/
 |   |-- pyproject.toml
 |   `-- main.py
+|-- frontend/
+|   |-- src/
+|   |-- package.json
+|   `-- vite.config.ts
 |-- .env.example
 `-- AGENTS.md
 ```
@@ -40,6 +44,8 @@ The backend currently owns:
 - SQLite persistence for jobs and scrape results
 - Playwright-based Google Maps scraping
 - normalization and deduplication of lead data
+- campaign domain records linked to scrape jobs
+- lead intelligence scoring and campaign result summaries
 
 The backend should not yet include:
 
@@ -47,6 +53,21 @@ The backend should not yet include:
 - CRM integrations
 - marketing content generation flows
 - speculative business logic that has not been confirmed
+
+## Frontend Scope
+
+The frontend currently owns:
+
+- scrape job launch flow
+- queue overview and runtime health display
+- selected job inspection and lead result browsing
+- polling-based status refresh aligned to current backend APIs
+
+The frontend should not yet include:
+
+- analytics derived from non-existent campaign models
+- legacy dashboard sections that depend on old Node-only endpoints
+- direct coupling to reference repository assets
 
 ## Migration Rules
 

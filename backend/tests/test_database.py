@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.core.database import Database
-from app.schemas.lead import ScrapedLead
+from app.schemas.lead import (
+    EnrichedLead,
+    IntelligenceFactors,
+    LeadIntelligence,
+    ScrapedLead,
+)
 
 
 def test_database_persists_job_lifecycle(tmp_path: Path) -> None:
@@ -36,3 +41,63 @@ def test_database_persists_job_lifecycle(tmp_path: Path) -> None:
     assert job["result_count"] == 1
     assert len(job["results"]) == 1
     assert job["results"][0].name == "Lead One"
+
+
+def test_database_persists_campaign_and_enriched_results(tmp_path: Path) -> None:
+    database = Database(tmp_path / "app.db")
+    database.initialize()
+    database.create_job(
+        job_id="job-2",
+        campaign_id="campaign-1",
+        query="Coffee shop Bandung",
+        source="google_maps",
+        max_results=5,
+    )
+    database.create_campaign(
+        campaign_id="campaign-1",
+        job_id="job-2",
+        name="Bandung cafes",
+        industry="restaurant",
+        location="Bandung",
+        query="Coffee shop Bandung",
+        source="google_maps",
+        max_results=5,
+    )
+
+    database.mark_campaign_running("campaign-1")
+    database.complete_campaign(
+        "campaign-1",
+        [
+            EnrichedLead(
+                name="Lead One",
+                address="Bandung",
+                phone="08123456789",
+                source="google_maps",
+                intelligence=LeadIntelligence(
+                    score=88,
+                    category="A+ (Excellent)",
+                    priority="HIGH",
+                    recommendation="Priority lead - contact immediately with premium approach",
+                    factors=IntelligenceFactors(
+                        data_completeness=90,
+                        business_quality=85,
+                        digital_presence=80,
+                        location_value=80,
+                        industry_potential=83,
+                        contactability=70,
+                    ),
+                ),
+            )
+        ],
+        total_leads=1,
+        average_score=88,
+        priority_leads=1,
+    )
+
+    campaign = database.get_campaign("campaign-1")
+
+    assert campaign is not None
+    assert campaign["status"] == "completed"
+    assert campaign["average_score"] == 88
+    assert campaign["priority_leads"] == 1
+    assert campaign["results"][0].intelligence.priority == "HIGH"

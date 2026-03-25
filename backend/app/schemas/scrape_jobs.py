@@ -28,6 +28,7 @@ class CreateScrapeJobRequest(BaseModel):
 
 class ScrapeJobSummary(BaseModel):
     id: str
+    campaign_id: str | None = None
     query: str
     source: ScrapeSource
     max_results: int
