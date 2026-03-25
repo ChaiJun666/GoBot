@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 import uvicorn
 
 from app.api.router import api_router
@@ -54,17 +54,19 @@ def register_frontend_routes(application: FastAPI, settings: Settings) -> None:
     dist_dir = settings.resolved_frontend_dist_path
     index_file = dist_dir / "index.html"
 
-    @application.get("/", include_in_schema=False)
-    async def root() -> dict[str, str] | FileResponse:
+    @application.get("/", include_in_schema=False, response_model=None)
+    async def root() -> Response:
         if settings.serve_frontend and index_file.exists():
             return FileResponse(index_file)
-        return {
-            "name": settings.app_name,
-            "docs": "/docs",
-            "api_prefix": settings.api_prefix,
-        }
+        return JSONResponse(
+            {
+                "name": settings.app_name,
+                "docs": "/docs",
+                "api_prefix": settings.api_prefix,
+            }
+        )
 
-    @application.get("/{full_path:path}", include_in_schema=False)
+    @application.get("/{full_path:path}", include_in_schema=False, response_model=None)
     async def frontend_fallback(full_path: str) -> FileResponse:
         if full_path.startswith(("api/", "docs", "redoc", "openapi.json")):
             raise HTTPException(status_code=404, detail="Not found")
