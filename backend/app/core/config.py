@@ -19,10 +19,8 @@ class Settings(BaseSettings):
 
     scraper_database_path: Path = Field(default=Path("data/app.db"))
     frontend_dist_path: Path = Field(default=Path("../frontend/dist"))
-    scraper_headless: bool = True
     scraper_timeout_ms: int = 60_000
-    scraper_scroll_pause_ms: int = 2_000
-    scraper_max_scroll_attempts: int = 50
+    scraper_verify_tls: bool = False
     scraper_user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "

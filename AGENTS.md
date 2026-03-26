@@ -13,7 +13,7 @@ The current migration plan is:
   - `uv`
   - `FastAPI`
   - `Vue 3`
-  - `Playwright`
+  - `Scrapling`
 
 At the current stage, only the backend scraping service skeleton is being migrated.
 
@@ -42,7 +42,7 @@ The backend currently owns:
 
 - scrape job creation and status tracking
 - SQLite persistence for jobs and scrape results
-- Playwright-based Google Maps scraping
+- Scrapling-based Google Maps scraping
 - normalization and deduplication of lead data
 - campaign domain records linked to scrape jobs
 - lead intelligence scoring and campaign result summaries
@@ -81,6 +81,6 @@ The frontend should not yet include:
 
 - Read the relevant source behavior before porting it
 - Keep backend code modular: API, core, schemas, services
-- Keep Playwright logic inside provider/service boundaries
+- Keep Scrapling fetch logic inside provider/service boundaries
 - Keep secrets out of code and out of committed data files
 - Avoid introducing extra infrastructure before requirements justify it

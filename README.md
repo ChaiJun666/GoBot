@@ -6,7 +6,7 @@ GoBot is a rewritten lead discovery and campaign intelligence console built with
 - `uv`
 - `FastAPI`
 - `Vue 3`
-- `Playwright`
+- `Scrapling`
 - `SQLite`
 
 The project is currently in active migration. It uses the older `business-leads-ai-automation` repository as a logic reference only, while all new implementation lives inside this repository.
@@ -18,7 +18,7 @@ For Chinese documentation, see [README_CN.md](README_CN.md).
 What is already implemented:
 
 - FastAPI backend with SQLite persistence
-- Playwright-based Google Maps scraping provider
+- Scrapling-based Google Maps scraping provider
 - scrape job lifecycle: queued, running, completed, failed
 - campaign domain model linked to scrape jobs
 - lead intelligence scoring for campaign results
@@ -66,7 +66,7 @@ The backend owns:
 
 - `campaign` creation and retrieval
 - linked `scrape_job` execution
-- Google Maps scraping through Playwright
+- Google Maps scraping through Scrapling
 - SQLite persistence for jobs and campaign results
 - intelligence scoring and campaign summary metrics
 - optional static serving of the built frontend
@@ -108,14 +108,9 @@ Important files:
 - `uv`
 - `pnpm`
 
-You also need Playwright browser binaries for scraping:
-
-```powershell
-cd backend
-uv run --no-cache playwright install chromium
-```
-
 If your local `uv` cache directory has permission issues, keep using `--no-cache` in `uv` commands.
+
+The current scraper does not launch a browser. The `playwright` Python package remains in backend dependencies only because `Scrapling 0.4.2` imports it internally for compatibility.
 
 ## Environment
 
@@ -130,10 +125,8 @@ Current environment variables:
 - `BACKEND_HOST`
 - `BACKEND_PORT`
 - `SCRAPER_DATABASE_PATH`
-- `SCRAPER_HEADLESS`
 - `SCRAPER_TIMEOUT_MS`
-- `SCRAPER_SCROLL_PAUSE_MS`
-- `SCRAPER_MAX_SCROLL_ATTEMPTS`
+- `SCRAPER_VERIFY_TLS`
 
 The SQLite database file is created automatically on first backend startup.
 
@@ -264,7 +257,8 @@ Backend tests currently exist for:
 ## Known Limitations
 
 - The scraper currently supports Google Maps only
-- Scraping selectors may need adjustment if Google Maps DOM changes
+- Google Maps payload structure may need adjustment if Google changes the internal response format
+- `SCRAPER_VERIFY_TLS=false` is the practical default on some Windows setups where `curl_cffi` certificate validation fails
 - The frontend currently focuses on campaigns and execution telemetry, not full business analytics
 - There is no authentication or multi-user separation yet
 - The project is still in migration, so naming and boundaries may continue to evolve

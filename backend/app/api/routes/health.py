@@ -18,7 +18,8 @@ async def healthcheck(request: Request) -> dict[str, object]:
             "healthy": database.healthcheck(),
         },
         "scraper": {
-            "headless": settings.scraper_headless,
+            "engine": "scrapling",
             "timeout_ms": settings.scraper_timeout_ms,
+            "verify_tls": settings.scraper_verify_tls,
         },
     }

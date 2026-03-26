@@ -6,7 +6,7 @@ GoBot 是一个正在重构中的线索发现与 campaign intelligence 控制台
 - `uv`
 - `FastAPI`
 - `Vue 3`
-- `Playwright`
+- `Scrapling`
 - `SQLite`
 
 该项目目前处于迁移阶段。旧仓库 `business-leads-ai-automation` 只作为业务逻辑参考，所有新实现都在当前仓库中完成。
@@ -19,7 +19,7 @@ GoBot 是一个正在重构中的线索发现与 campaign intelligence 控制台
 
 - 基于 FastAPI 的后端服务
 - 基于 SQLite 的任务和结果持久化
-- 基于 Playwright 的 Google Maps 抓取
+- 基于 Scrapling 的 Google Maps 抓取
 - `scrape job` 生命周期管理：`queued`、`running`、`completed`、`failed`
 - 与 `scrape job` 关联的 `campaign` 领域模型
 - campaign 结果的 lead intelligence 评分
@@ -67,7 +67,7 @@ backend/app/
 
 - `campaign` 的创建与查询
 - 关联 `scrape_job` 的执行
-- 通过 Playwright 抓取 Google Maps
+- 通过 Scrapling 抓取 Google Maps
 - 将 jobs 与 campaign 结果持久化到 SQLite
 - 对 leads 做 intelligence 评分并生成 summary
 - 在存在前端构建产物时直接提供静态资源服务
@@ -111,14 +111,9 @@ backend/app/
 - `uv`
 - `pnpm`
 
-抓取前还需要安装 Playwright 浏览器：
-
-```powershell
-cd backend
-uv run --no-cache playwright install chromium
-```
-
 如果你本机的 `uv` cache 目录存在权限问题，建议在 `uv` 命令中继续带上 `--no-cache`。
+
+当前抓取流程不会启动浏览器。`playwright` Python 包仍然保留在后端依赖中，只是因为 `Scrapling 0.4.2` 运行时会内部导入它。
 
 ## 环境配置
 
@@ -133,10 +128,8 @@ Copy-Item .env.example .env
 - `BACKEND_HOST`
 - `BACKEND_PORT`
 - `SCRAPER_DATABASE_PATH`
-- `SCRAPER_HEADLESS`
 - `SCRAPER_TIMEOUT_MS`
-- `SCRAPER_SCROLL_PAUSE_MS`
-- `SCRAPER_MAX_SCROLL_ATTEMPTS`
+- `SCRAPER_VERIFY_TLS`
 
 SQLite 数据库会在后端首次启动时自动创建。
 
@@ -267,7 +260,8 @@ pnpm.cmd build
 ## 已知限制
 
 - 当前只支持 Google Maps 抓取
-- 如果 Google Maps DOM 结构变化，抓取选择器可能需要更新
+- 如果 Google Maps 内部 payload 结构变化，解析逻辑可能需要更新
+- `SCRAPER_VERIFY_TLS=false` 是为了绕过部分 Windows 环境下 `curl_cffi` 证书链校验失败的默认设置
 - 当前前端重点是 campaign 与执行遥测，不是完整 BI 仪表盘
 - 还没有认证、多用户隔离或权限控制
 - 项目仍处于迁移中，部分命名和边界后续可能继续调整
