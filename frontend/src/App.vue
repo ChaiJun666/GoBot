@@ -43,6 +43,9 @@ const activeView = workspace.activeView;
 const { locale, t } = useI18n();
 
 let pollTimer: number | null = null;
+let pollInFlight = false;
+
+type RefreshMode = "visible" | "silent";
 
 const selectedCampaign = computed(
   () =>
@@ -131,8 +134,12 @@ async function refreshHealth() {
   }
 }
 
-async function refreshCampaigns(options: { preserveSelection?: boolean } = {}) {
-  loadingCampaigns.value = true;
+async function refreshCampaigns(options: { preserveSelection?: boolean; mode?: RefreshMode } = {}) {
+  const mode = options.mode ?? "visible";
+  if (mode === "visible") {
+    loadingCampaigns.value = true;
+  }
+
   try {
     const payload = await api.listCampaigns();
     campaigns.value = payload;
@@ -156,47 +163,95 @@ async function refreshCampaigns(options: { preserveSelection?: boolean } = {}) {
   } catch (error) {
     setMessage(error);
   } finally {
-    loadingCampaigns.value = false;
+    if (mode === "visible") {
+      loadingCampaigns.value = false;
+    }
   }
 }
 
-async function refreshJobs() {
-  loadingJobs.value = true;
+async function refreshJobs(options: { mode?: RefreshMode } = {}) {
+  const mode = options.mode ?? "visible";
+  if (mode === "visible") {
+    loadingJobs.value = true;
+  }
+
   try {
     jobs.value = await api.listJobs();
     workspace.setJobs(jobs.value);
   } catch (error) {
     setMessage(error);
   } finally {
-    loadingJobs.value = false;
+    if (mode === "visible") {
+      loadingJobs.value = false;
+    }
   }
 }
 
-async function selectJob(jobId: string) {
-  workspace.selectJob(jobId);
-  loadingJobResults.value = true;
+async function loadJobResults(jobId: string, options: { mode?: RefreshMode } = {}) {
+  const mode = options.mode ?? "visible";
+  const shouldShowLoading = mode === "visible" && selectedJobResults.value?.job.id !== jobId;
+
+  if (shouldShowLoading) {
+    loadingJobResults.value = true;
+  }
+
   try {
     selectedJobResults.value = await api.getJobResults(jobId);
   } catch (error) {
     setMessage(error);
   } finally {
-    loadingJobResults.value = false;
+    if (shouldShowLoading) {
+      loadingJobResults.value = false;
+    }
   }
+}
+
+async function refreshSelectedCampaign(options: { mode?: RefreshMode } = {}) {
+  if (!selectedCampaignId.value) {
+    selectedCampaignDetail.value = null;
+    return;
+  }
+
+  const mode = options.mode ?? "visible";
+  const shouldShowLoading =
+    mode === "visible" && selectedCampaignDetail.value?.id !== selectedCampaignId.value;
+
+  if (shouldShowLoading) {
+    loadingCampaignDetail.value = true;
+  }
+
+  try {
+    selectedCampaignDetail.value = await api.getCampaign(selectedCampaignId.value);
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    if (shouldShowLoading) {
+      loadingCampaignDetail.value = false;
+    }
+  }
+}
+
+async function selectJob(jobId: string) {
+  workspace.selectJob(jobId);
+  await loadJobResults(jobId);
 }
 
 async function selectCampaign(campaignId: string) {
   workspace.selectCampaign(campaignId);
-  loadingCampaignDetail.value = true;
-  try {
-    selectedCampaignDetail.value = await api.getCampaign(campaignId);
-    const jobId = selectedCampaignDetail.value.job_id;
-    if (jobId) {
-      await selectJob(jobId);
-    }
-  } catch (error) {
-    setMessage(error);
-  } finally {
-    loadingCampaignDetail.value = false;
+  await refreshSelectedCampaign();
+}
+
+async function refreshCampaignWorkspace(options: { mode?: RefreshMode } = {}) {
+  await refreshCampaigns({ preserveSelection: true, mode: options.mode });
+  if (activeView.value === "campaigns") {
+    await refreshSelectedCampaign({ mode: options.mode });
+  }
+}
+
+async function refreshJobsWorkspace(options: { mode?: RefreshMode } = {}) {
+  await refreshJobs({ mode: options.mode });
+  if (activeView.value === "jobs" && selectedJobId.value) {
+    await loadJobResults(selectedJobId.value, { mode: options.mode });
   }
 }
 
@@ -236,7 +291,7 @@ function openCampaignView() {
 async function bootstrap() {
   await Promise.all([refreshHealth(), refreshCampaigns(), refreshJobs()]);
   if (selectedCampaignId.value) {
-    await selectCampaign(selectedCampaignId.value);
+    await refreshSelectedCampaign();
   }
 }
 
@@ -244,14 +299,19 @@ onMounted(async () => {
   await bootstrap();
 
   pollTimer = window.setInterval(async () => {
-    await Promise.all([
-      refreshHealth(),
-      refreshCampaigns({ preserveSelection: true }),
-      refreshJobs(),
-    ]);
+    if (pollInFlight) {
+      return;
+    }
 
-    if (selectedCampaignId.value) {
-      await selectCampaign(selectedCampaignId.value);
+    pollInFlight = true;
+    try {
+      await Promise.all([
+        refreshHealth(),
+        refreshCampaignWorkspace({ mode: "silent" }),
+        refreshJobsWorkspace({ mode: "silent" }),
+      ]);
+    } finally {
+      pollInFlight = false;
     }
   }, 5000);
 });
@@ -359,7 +419,7 @@ onUnmounted(() => {
           :selected-campaign-id="selectedCampaignId"
           :loading="loadingCampaigns"
           @select="selectCampaign"
-          @refresh="refreshCampaigns({ preserveSelection: true })"
+          @refresh="refreshCampaignWorkspace()"
         />
 
         <CampaignWorkbench
@@ -376,7 +436,7 @@ onUnmounted(() => {
             :selected-job-id="selectedJobId"
             :loading="loadingJobs"
             @select="selectJob"
-            @refresh="refreshJobs"
+            @refresh="refreshJobsWorkspace"
           />
 
           <section class="panel panel-detail">
