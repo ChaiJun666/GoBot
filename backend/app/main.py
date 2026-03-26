@@ -11,6 +11,7 @@ from app.core.config import Settings, get_settings
 from app.core.database import Database
 from app.core.job_manager import ScrapeJobManager
 from app.services.intelligence.scoring import LeadIntelligenceScorer
+from app.services.scraping.linkedin_session import LinkedInSessionService
 from app.services.scraping.service import ScrapeService
 
 
@@ -19,7 +20,11 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     database = Database(settings.resolved_database_path)
     database.initialize()
-    scrape_service = ScrapeService(settings=settings)
+    linkedin_session_service = LinkedInSessionService(settings=settings, database=database)
+    scrape_service = ScrapeService(
+        settings=settings,
+        linkedin_session_service=linkedin_session_service,
+    )
     intelligence_scorer = LeadIntelligenceScorer()
     job_manager = ScrapeJobManager(
         database=database,
@@ -31,6 +36,7 @@ async def lifespan(app: FastAPI):
     app.state.database = database
     app.state.job_manager = job_manager
     app.state.intelligence_scorer = intelligence_scorer
+    app.state.linkedin_session_service = linkedin_session_service
 
     yield
 

@@ -17,6 +17,7 @@ def test_database_persists_job_lifecycle(tmp_path: Path) -> None:
     database.create_job(
         job_id="job-1",
         query="Restaurant Jakarta",
+        query_config={"query": "Restaurant Jakarta"},
         source="google_maps",
         max_results=10,
     )
@@ -50,6 +51,7 @@ def test_database_persists_campaign_and_enriched_results(tmp_path: Path) -> None
         job_id="job-2",
         campaign_id="campaign-1",
         query="Coffee shop Bandung",
+        query_config={"query": "Coffee shop Bandung"},
         source="google_maps",
         max_results=5,
     )
@@ -60,6 +62,7 @@ def test_database_persists_campaign_and_enriched_results(tmp_path: Path) -> None
         industry="restaurant",
         location="Bandung",
         query="Coffee shop Bandung",
+        query_config={"query": "Coffee shop Bandung"},
         source="google_maps",
         max_results=5,
     )
@@ -112,6 +115,7 @@ def test_database_retries_failed_job_and_campaign(tmp_path: Path) -> None:
         job_id="job-3",
         campaign_id="campaign-3",
         query="Dentist Shanghai",
+        query_config={"query": "Dentist Shanghai"},
         source="google_maps",
         max_results=10,
     )
@@ -122,6 +126,7 @@ def test_database_retries_failed_job_and_campaign(tmp_path: Path) -> None:
         industry="healthcare",
         location="Shanghai",
         query="Dentist Shanghai",
+        query_config={"query": "Dentist Shanghai"},
         source="google_maps",
         max_results=10,
     )

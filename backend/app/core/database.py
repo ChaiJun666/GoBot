@@ -28,6 +28,7 @@ class Database:
                     id TEXT PRIMARY KEY,
                     campaign_id TEXT,
                     query TEXT NOT NULL,
+                    query_config_json TEXT NOT NULL DEFAULT '{}',
                     source TEXT NOT NULL,
                     max_results INTEGER NOT NULL,
                     status TEXT NOT NULL,
@@ -49,6 +50,7 @@ class Database:
                     industry TEXT NOT NULL,
                     location TEXT NOT NULL,
                     query TEXT NOT NULL,
+                    query_config_json TEXT NOT NULL DEFAULT '{}',
                     source TEXT NOT NULL,
                     max_results INTEGER NOT NULL,
                     status TEXT NOT NULL,
@@ -64,9 +66,19 @@ class Database:
                 );
                 CREATE INDEX IF NOT EXISTS idx_campaigns_created_at
                 ON campaigns(created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS source_sessions (
+                    source TEXT PRIMARY KEY,
+                    account_label TEXT,
+                    cookies_json TEXT NOT NULL DEFAULT '{}',
+                    last_error TEXT,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             self._ensure_column(connection, "scrape_jobs", "campaign_id", "TEXT")
+            self._ensure_column(connection, "scrape_jobs", "query_config_json", "TEXT NOT NULL DEFAULT '{}'")
+            self._ensure_column(connection, "campaigns", "query_config_json", "TEXT NOT NULL DEFAULT '{}'")
 
     def healthcheck(self) -> bool:
         try:
@@ -81,6 +93,7 @@ class Database:
         *,
         job_id: str,
         query: str,
+        query_config: dict[str, Any] | None,
         source: str,
         max_results: int,
         campaign_id: str | None = None,
@@ -91,8 +104,8 @@ class Database:
                 """
                 INSERT INTO scrape_jobs (
                     id, campaign_id, query, source, max_results, status, result_count,
-                    results_json, error_message, created_at, started_at, completed_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    query_config_json, results_json, error_message, created_at, started_at, completed_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job_id,
@@ -102,6 +115,7 @@ class Database:
                     max_results,
                     "queued",
                     0,
+                    json.dumps(query_config or {}),
                     "[]",
                     None,
                     now,
@@ -120,6 +134,7 @@ class Database:
         industry: str,
         location: str,
         query: str,
+        query_config: dict[str, Any] | None,
         source: str,
         max_results: int,
     ) -> None:
@@ -129,9 +144,9 @@ class Database:
                 """
                 INSERT INTO campaigns (
                     id, job_id, name, industry, location, query, source, max_results, status,
-                    total_leads, average_score, priority_leads, results_json, error_message,
+                    query_config_json, total_leads, average_score, priority_leads, results_json, error_message,
                     created_at, started_at, completed_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     campaign_id,
@@ -143,6 +158,7 @@ class Database:
                     source,
                     max_results,
                     "queued",
+                    json.dumps(query_config or {}),
                     0,
                     0,
                     0,
@@ -277,7 +293,7 @@ class Database:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT id, campaign_id, query, source, max_results, status, result_count, results_json,
+                SELECT id, campaign_id, query, query_config_json, source, max_results, status, result_count, results_json,
                        error_message, created_at, started_at, completed_at, updated_at
                 FROM scrape_jobs
                 ORDER BY datetime(created_at) DESC
@@ -291,7 +307,7 @@ class Database:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                SELECT id, campaign_id, query, source, max_results, status, result_count, results_json,
+                SELECT id, campaign_id, query, query_config_json, source, max_results, status, result_count, results_json,
                        error_message, created_at, started_at, completed_at, updated_at
                 FROM scrape_jobs
                 WHERE id = ?
@@ -306,7 +322,7 @@ class Database:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT id, job_id, name, industry, location, query, source, max_results, status,
+                SELECT id, job_id, name, industry, location, query, query_config_json, source, max_results, status,
                        total_leads, average_score, priority_leads, results_json, error_message,
                        created_at, started_at, completed_at, updated_at
                 FROM campaigns
@@ -321,7 +337,7 @@ class Database:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                SELECT id, job_id, name, industry, location, query, source, max_results, status,
+                SELECT id, job_id, name, industry, location, query, query_config_json, source, max_results, status,
                        total_leads, average_score, priority_leads, results_json, error_message,
                        created_at, started_at, completed_at, updated_at
                 FROM campaigns
@@ -337,7 +353,7 @@ class Database:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                SELECT id, job_id, name, industry, location, query, source, max_results, status,
+                SELECT id, job_id, name, industry, location, query, query_config_json, source, max_results, status,
                        total_leads, average_score, priority_leads, results_json, error_message,
                        created_at, started_at, completed_at, updated_at
                 FROM campaigns
@@ -348,6 +364,55 @@ class Database:
         if row is None:
             return None
         return self._row_to_campaign_record(row)
+
+    def upsert_source_session(
+        self,
+        *,
+        source: str,
+        cookies: dict[str, str],
+        account_label: str | None,
+        last_error: str | None = None,
+    ) -> None:
+        now = utc_now_iso()
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO source_sessions (source, account_label, cookies_json, last_error, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(source) DO UPDATE SET
+                    account_label = excluded.account_label,
+                    cookies_json = excluded.cookies_json,
+                    last_error = excluded.last_error,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    source,
+                    account_label,
+                    json.dumps(cookies),
+                    last_error,
+                    now,
+                ),
+            )
+
+    def get_source_session(self, source: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT source, account_label, cookies_json, last_error, updated_at
+                FROM source_sessions
+                WHERE source = ?
+                """,
+                (source,),
+            ).fetchone()
+        if row is None:
+            return None
+        record = dict(row)
+        record["cookies"] = json.loads(record.pop("cookies_json"))
+        return record
+
+    def delete_source_session(self, source: str) -> None:
+        with self._lock, self._connect() as connection:
+            connection.execute("DELETE FROM source_sessions WHERE source = ?", (source,))
 
     def _update_record(self, table: str, key_column: str, key_value: str, **fields: Any) -> None:
         assignments = ", ".join(f"{column} = ?" for column in fields)
@@ -374,6 +439,7 @@ class Database:
 
     def _row_to_job_record(self, row: sqlite3.Row) -> dict[str, Any]:
         record = dict(row)
+        record["query_config"] = json.loads(record.pop("query_config_json"))
         record["results"] = [
             ScrapedLead.model_validate(item)
             for item in json.loads(record.pop("results_json"))
@@ -382,6 +448,7 @@ class Database:
 
     def _row_to_campaign_record(self, row: sqlite3.Row) -> dict[str, Any]:
         record = dict(row)
+        record["query_config"] = json.loads(record.pop("query_config_json"))
         record["results"] = [
             EnrichedLead.model_validate(item)
             for item in json.loads(record.pop("results_json"))

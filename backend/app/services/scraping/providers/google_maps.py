@@ -4,7 +4,7 @@ import asyncio
 import json
 import re
 from html import unescape
-from typing import Any
+from typing import Any, Mapping
 from urllib.parse import parse_qs, quote, unquote, urljoin, urlsplit
 
 from scrapling import AsyncFetcher
@@ -37,7 +37,13 @@ class GoogleMapsScrapeProvider(ScrapeProvider):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    async def scrape(self, *, query: str, max_results: int) -> list[ScrapedLead]:
+    async def scrape(
+        self,
+        *,
+        query: str,
+        max_results: int,
+        query_config: Mapping[str, Any] | None = None,
+    ) -> list[ScrapedLead]:
         search_url = self._build_search_url(query)
 
         try:

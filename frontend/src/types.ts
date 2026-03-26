@@ -1,11 +1,25 @@
 export type ScrapeJobStatus = "queued" | "running" | "completed" | "failed";
-export type ScrapeSource = "google_maps";
+export type ScrapeSource = "google_maps" | "linkedin";
 export type CampaignStatus = "queued" | "running" | "completed" | "failed";
+
+export interface GoogleMapsQueryConfig {
+  query: string;
+}
+
+export interface LinkedInQueryConfig {
+  keywords: string;
+  title: string | null;
+  company: string | null;
+  location: string | null;
+}
+
+export type SourceQueryConfig = GoogleMapsQueryConfig | LinkedInQueryConfig;
 
 export interface ScrapeJobSummary {
   id: string;
   campaign_id: string | null;
   query: string;
+  query_config: SourceQueryConfig | null;
   source: ScrapeSource;
   max_results: number;
   status: ScrapeJobStatus;
@@ -20,9 +34,13 @@ export interface ScrapeJobSummary {
 export interface ScrapedLead {
   name: string;
   address: string;
+  location: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
+  headline: string | null;
+  current_company: string | null;
+  profile_url: string | null;
   reference_link: string | null;
   rating: string | null;
   has_website: boolean;
@@ -57,7 +75,8 @@ export interface ScrapeJobResultsResponse {
 }
 
 export interface CreateScrapeJobRequest {
-  query: string;
+  query: string | null;
+  query_config: SourceQueryConfig | null;
   max_results: number;
   source: ScrapeSource;
 }
@@ -70,7 +89,8 @@ export interface CreateCampaignRequest {
   name: string;
   industry: string;
   location: string;
-  query: string;
+  query: string | null;
+  query_config: SourceQueryConfig | null;
   max_results: number;
   source: ScrapeSource;
 }
@@ -82,6 +102,7 @@ export interface CampaignSummary {
   industry: string;
   location: string;
   query: string;
+  query_config: SourceQueryConfig | null;
   source: ScrapeSource;
   max_results: number;
   status: CampaignStatus;
@@ -101,6 +122,19 @@ export interface CampaignDetail extends CampaignSummary {
 
 export interface CreateCampaignResponse {
   campaign: CampaignSummary;
+}
+
+export interface LinkedInSessionStatus {
+  source: "linkedin";
+  connected: boolean;
+  account_label: string | null;
+  last_error: string | null;
+  updated_at: string | null;
+}
+
+export interface ConnectLinkedInSessionRequest {
+  username: string;
+  password: string;
 }
 
 export interface HealthResponse {

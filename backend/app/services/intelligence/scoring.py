@@ -84,7 +84,9 @@ class LeadIntelligenceScorer:
         if lead.address.strip():
             score += 20
         if lead.phone:
-            score += 25
+            score += 20
+        if lead.email:
+            score += 15
         if lead.website:
             score += 15
         if lead.rating and self._parse_number(lead.rating) is not None:
@@ -159,6 +161,8 @@ class LeadIntelligenceScorer:
             score += 50
             if lead.phone.startswith("08") or lead.phone.startswith("+62"):
                 score += 20
+        if lead.email:
+            score += 30
         if lead.website:
             score += 10
         return min(score, 100)

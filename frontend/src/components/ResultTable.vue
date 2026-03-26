@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import StatusBadge from "@/components/StatusBadge.vue";
+import { describeSourceQuery } from "@/lib/sources";
 import type { ScrapeJobResultsResponse, ScrapedLead } from "@/types";
 
 const props = defineProps<{
@@ -17,6 +18,8 @@ const emit = defineEmits<{
 
 const filterText = ref("");
 const { t } = useI18n();
+const source = computed(() => props.payload?.job.source ?? "google_maps");
+const isLinkedIn = computed(() => source.value === "linkedin");
 
 const filteredResults = computed(() => {
   if (!props.payload) {
@@ -29,7 +32,19 @@ const filteredResults = computed(() => {
   }
 
   return props.payload.results.filter((lead) =>
-    [lead.name, lead.address, lead.phone, lead.email, lead.website]
+    [
+      lead.name,
+      lead.address,
+      lead.location,
+      lead.phone,
+      lead.email,
+      lead.website,
+      lead.headline,
+      lead.current_company,
+      lead.profile_url,
+      lead.reference_link,
+      lead.rating,
+    ]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(needle)),
   );
@@ -45,6 +60,18 @@ function formatDate(value: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function renderValue(value: string | null | undefined): string {
+  return value?.trim() || t("common.unavailable");
+}
+
+function getQueryLabel(): string {
+  if (!props.payload) {
+    return "";
+  }
+
+  return props.payload.job.query || describeSourceQuery(props.payload.job.query_config, props.payload.job.source);
 }
 </script>
 
@@ -81,11 +108,15 @@ function formatDate(value: string | null): string {
       <div class="results-summary">
         <div>
           <span class="summary-label">{{ t("jobs.query") }}</span>
-          <strong>{{ payload.job.query }}</strong>
+          <strong>{{ getQueryLabel() }}</strong>
         </div>
         <div>
           <span class="summary-label">{{ t("jobs.created") }}</span>
           <strong>{{ formatDate(payload.job.created_at) }}</strong>
+        </div>
+        <div>
+          <span class="summary-label">{{ t("jobs.source") }}</span>
+          <strong>{{ t(`sources.${payload.job.source}`) }}</strong>
         </div>
         <div>
           <span class="summary-label">{{ t("jobs.leads") }}</span>
@@ -102,26 +133,76 @@ function formatDate(value: string | null): string {
         <table>
           <thead>
             <tr>
-              <th>{{ t("leadTable.columns.business") }}</th>
-              <th>{{ t("leadTable.columns.address") }}</th>
-              <th>{{ t("leadTable.columns.phone") }}</th>
-              <th>{{ t("leadTable.columns.email") }}</th>
-              <th>{{ t("leadTable.columns.rating") }}</th>
-              <th>{{ t("leadTable.columns.website") }}</th>
+              <th>{{ t("leadTable.columns.lead") }}</th>
+              <th>{{ t("leadTable.columns.context") }}</th>
+              <th>{{ t("leadTable.columns.contact") }}</th>
+              <th>{{ t("leadTable.columns.profile") }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="lead in filteredResults" :key="`${lead.name}-${lead.address}`">
-              <td>{{ lead.name }}</td>
-              <td>{{ lead.address }}</td>
-              <td>{{ lead.phone || "-" }}</td>
-              <td>{{ lead.email || t("common.unavailable") }}</td>
-              <td>{{ lead.rating || "-" }}</td>
+            <tr
+              v-for="lead in filteredResults"
+              :key="`${lead.name}-${lead.profile_url ?? lead.reference_link ?? lead.address}`"
+            >
               <td>
-                <a v-if="lead.website" :href="lead.website" target="_blank" rel="noreferrer">
-                  {{ t("common.visit") }}
-                </a>
-                <span v-else>-</span>
+                <strong>{{ lead.name }}</strong>
+                <div class="subcell">
+                  {{
+                    isLinkedIn
+                      ? renderValue(lead.headline || lead.location)
+                      : renderValue(lead.address)
+                  }}
+                </div>
+              </td>
+              <td>
+                <div v-if="isLinkedIn">
+                  <div class="subcell">
+                    {{ t("leadTable.details.company") }}: {{ renderValue(lead.current_company) }}
+                  </div>
+                  <div class="subcell">
+                    {{ t("leadTable.details.location") }}: {{ renderValue(lead.location) }}
+                  </div>
+                </div>
+                <div v-else>
+                  <div class="subcell">
+                    {{ t("leadTable.details.address") }}: {{ renderValue(lead.address) }}
+                  </div>
+                  <div class="subcell">
+                    {{ t("leadTable.details.rating") }}: {{ renderValue(lead.rating) }}
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div class="subcell">
+                  {{ t("leadTable.details.phone") }}: {{ renderValue(lead.phone) }}
+                </div>
+                <div class="subcell">
+                  {{ t("leadTable.details.email") }}: {{ renderValue(lead.email) }}
+                </div>
+              </td>
+              <td>
+                <div v-if="isLinkedIn">
+                  <a
+                    v-if="lead.profile_url"
+                    :href="lead.profile_url"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {{ t("leadTable.details.profileUrl") }}
+                  </a>
+                  <span v-else>{{ t("common.unavailable") }}</span>
+                </div>
+                <div v-else>
+                  <a v-if="lead.website" :href="lead.website" target="_blank" rel="noreferrer">
+                    {{ t("leadTable.details.website") }}
+                  </a>
+                  <span v-else>{{ t("common.unavailable") }}</span>
+                </div>
+                <div v-if="lead.reference_link" class="subcell">
+                  <a :href="lead.reference_link" target="_blank" rel="noreferrer">
+                    {{ t("leadTable.details.sourceLink") }}
+                  </a>
+                </div>
               </td>
             </tr>
           </tbody>

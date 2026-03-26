@@ -25,9 +25,13 @@ class LeadIntelligence(BaseModel):
 class ScrapedLead(BaseModel):
     name: str
     address: str
+    location: str | None = None
     phone: str | None = None
     email: str | None = None
     website: str | None = None
+    headline: str | None = None
+    current_company: str | None = None
+    profile_url: str | None = None
     reference_link: str | None = None
     rating: str | None = None
     has_website: bool = False

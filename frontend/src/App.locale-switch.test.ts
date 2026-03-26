@@ -19,6 +19,15 @@ vi.mock("@/lib/api", () => ({
     listJobs: vi.fn(async () => []),
     getCampaign: vi.fn(),
     getJobResults: vi.fn(),
+    getLinkedInSession: vi.fn(async () => ({
+      source: "linkedin",
+      connected: false,
+      account_label: null,
+      last_error: null,
+      updated_at: null,
+    })),
+    connectLinkedInSession: vi.fn(),
+    disconnectLinkedInSession: vi.fn(),
     retryCampaign: vi.fn(),
     retryJob: vi.fn(),
     createCampaign: vi.fn(),
@@ -39,7 +48,7 @@ describe("App locale switch", () => {
     expect(wrapper.text()).toContain("Overview");
     expect(wrapper.text()).toContain("New Campaign");
 
-    await wrapper.get("button.locale-button").trigger("click");
+    await wrapper.findAll("button.locale-button")[0].trigger("click");
     await flushPromises();
 
     expect(wrapper.text()).toContain("总览");

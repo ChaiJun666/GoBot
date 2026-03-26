@@ -3,6 +3,7 @@ import { useI18n } from "vue-i18n";
 
 import StatusBadge from "@/components/StatusBadge.vue";
 import LeadInspectorTable from "@/components/campaigns/LeadInspectorTable.vue";
+import { describeSourceQuery } from "@/lib/sources";
 import type { CampaignDetail, EnrichedLead, ScrapeJobSummary } from "@/types";
 
 defineProps<{
@@ -17,6 +18,12 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+
+function getQueryLabel(
+  value: Pick<CampaignDetail, "query" | "query_config" | "source"> | Pick<ScrapeJobSummary, "query" | "query_config" | "source">,
+): string {
+  return value.query || describeSourceQuery(value.query_config, value.source);
+}
 </script>
 
 <template>
@@ -59,6 +66,10 @@ const { t } = useI18n();
 
         <dl class="detail-grid">
           <div>
+            <dt>{{ t("campaigns.detail.source") }}</dt>
+            <dd>{{ t(`sources.${campaign.source}`) }}</dd>
+          </div>
+          <div>
             <dt>{{ t("campaigns.detail.industry") }}</dt>
             <dd>{{ campaign.industry }}</dd>
           </div>
@@ -68,7 +79,7 @@ const { t } = useI18n();
           </div>
           <div>
             <dt>{{ t("campaigns.detail.query") }}</dt>
-            <dd>{{ campaign.query }}</dd>
+            <dd>{{ getQueryLabel(campaign) }}</dd>
           </div>
           <div>
             <dt>{{ t("campaigns.detail.jobId") }}</dt>
@@ -96,6 +107,10 @@ const { t } = useI18n();
           <dd>{{ linkedJob.campaign_id ?? t("common.unlinked") }}</dd>
         </div>
         <div>
+          <dt>{{ t("jobs.source") }}</dt>
+          <dd>{{ t(`sources.${linkedJob.source}`) }}</dd>
+        </div>
+        <div>
           <dt>{{ t("jobs.created") }}</dt>
           <dd>{{ linkedJob.created_at }}</dd>
         </div>
@@ -104,12 +119,16 @@ const { t } = useI18n();
           <dd>{{ linkedJob.completed_at ?? t("common.pending") }}</dd>
         </div>
         <div>
-          <dt>{{ t("jobs.requested") }}</dt>
-          <dd>{{ linkedJob.max_results }}</dd>
+          <dt>{{ t("jobs.query") }}</dt>
+          <dd>{{ getQueryLabel(linkedJob) }}</dd>
         </div>
         <div>
           <dt>{{ t("jobs.returned") }}</dt>
           <dd>{{ linkedJob.result_count }}</dd>
+        </div>
+        <div>
+          <dt>{{ t("jobs.requested") }}</dt>
+          <dd>{{ linkedJob.max_results }}</dd>
         </div>
       </dl>
       <div v-else class="empty-state compact-empty">

@@ -15,6 +15,9 @@ const apiMocks = vi.hoisted(() => ({
   listJobs: vi.fn(),
   getCampaign: vi.fn(),
   getJobResults: vi.fn(),
+  getLinkedInSession: vi.fn(),
+  connectLinkedInSession: vi.fn(),
+  disconnectLinkedInSession: vi.fn(),
   retryCampaign: vi.fn(),
   retryJob: vi.fn(),
   createCampaign: vi.fn(),
@@ -47,6 +50,7 @@ const campaigns: CampaignSummary[] = [
     industry: "hospitality",
     location: "Seattle",
     query: "Seattle cafes",
+    query_config: { query: "Seattle cafes" },
     source: "google_maps",
     max_results: 20,
     status: "running",
@@ -66,6 +70,7 @@ const campaigns: CampaignSummary[] = [
     industry: "fitness",
     location: "Portland",
     query: "Portland gyms",
+    query_config: { query: "Portland gyms" },
     source: "google_maps",
     max_results: 15,
     status: "completed",
@@ -85,6 +90,7 @@ const jobs: ScrapeJobSummary[] = [
     id: "job-1",
     campaign_id: "campaign-1",
     query: "Seattle cafes",
+    query_config: { query: "Seattle cafes" },
     source: "google_maps",
     max_results: 20,
     status: "running",
@@ -99,6 +105,7 @@ const jobs: ScrapeJobSummary[] = [
     id: "job-2",
     campaign_id: "campaign-2",
     query: "Portland gyms",
+    query_config: { query: "Portland gyms" },
     source: "google_maps",
     max_results: 15,
     status: "completed",
@@ -139,6 +146,13 @@ describe("App polling behavior", () => {
     apiMocks.getHealth.mockResolvedValue(healthResponse);
     apiMocks.listCampaigns.mockResolvedValue(campaigns);
     apiMocks.listJobs.mockResolvedValue(jobs);
+    apiMocks.getLinkedInSession.mockResolvedValue({
+      source: "linkedin",
+      connected: false,
+      account_label: null,
+      last_error: null,
+      updated_at: null,
+    });
     apiMocks.getCampaign.mockImplementation(async (campaignId: string) => {
       const campaign = campaignDetails.get(campaignId);
       if (!campaign) {

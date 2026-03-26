@@ -11,6 +11,7 @@ from app.schemas.lead import ScrapedLead
 
 class ScrapeSource(str, Enum):
     GOOGLE_MAPS = "google_maps"
+    LINKEDIN = "linkedin"
 
 
 class ScrapeJobStatus(str, Enum):
@@ -21,7 +22,8 @@ class ScrapeJobStatus(str, Enum):
 
 
 class CreateScrapeJobRequest(BaseModel):
-    query: str = Field(min_length=2, max_length=200)
+    query: str | None = Field(default=None, min_length=2, max_length=200)
+    query_config: dict[str, Any] | None = None
     max_results: int = Field(default=20, ge=1, le=100)
     source: ScrapeSource = ScrapeSource.GOOGLE_MAPS
 
@@ -30,6 +32,7 @@ class ScrapeJobSummary(BaseModel):
     id: str
     campaign_id: str | None = None
     query: str
+    query_config: dict[str, Any] | None = None
     source: ScrapeSource
     max_results: int
     status: ScrapeJobStatus

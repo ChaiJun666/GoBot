@@ -2,6 +2,7 @@
 import { useI18n } from "vue-i18n";
 
 import StatusBadge from "@/components/StatusBadge.vue";
+import { describeSourceQuery } from "@/lib/sources";
 import type { ScrapeJobSummary } from "@/types";
 
 defineProps<{
@@ -29,6 +30,14 @@ function formatDate(value: string | null): string {
     minute: "2-digit",
   }).format(new Date(value));
 }
+
+function getSourceLabel(job: ScrapeJobSummary): string {
+  return t(`sources.${job.source}`);
+}
+
+function getQueryLabel(job: ScrapeJobSummary): string {
+  return job.query || describeSourceQuery(job.query_config, job.source);
+}
 </script>
 
 <template>
@@ -54,14 +63,15 @@ function formatDate(value: string | null): string {
       >
         <div class="job-card-top">
           <StatusBadge :status="job.status" />
-          <span class="job-count">{{ job.result_count }} {{ t("jobs.leadsSuffix") }}</span>
+          <span class="job-count">{{ getSourceLabel(job) }}</span>
         </div>
-        <h3>{{ job.query }}</h3>
+        <h3>{{ getQueryLabel(job) }}</h3>
         <p class="job-meta">
           {{ formatDate(job.created_at) }}
           <span>|</span>
           {{ job.max_results }} {{ t("jobs.requestedSuffix") }}
         </p>
+        <p class="job-meta">{{ job.result_count }} {{ t("jobs.leadsSuffix") }}</p>
         <p v-if="job.error_message" class="job-error">{{ job.error_message }}</p>
       </button>
     </div>

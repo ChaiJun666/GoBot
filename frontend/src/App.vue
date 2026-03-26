@@ -11,17 +11,20 @@ import OperationsCenter from "@/components/jobs/OperationsCenter.vue";
 import MetricCard from "@/components/MetricCard.vue";
 import ResultTable from "@/components/ResultTable.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
+import LinkedInSessionCard from "@/components/system/LinkedInSessionCard.vue";
 import { createConsoleWorkspace, type ConsoleView } from "@/composables/useConsoleWorkspace";
 import { api } from "@/lib/api";
 import { persistLocale, type AppLocale } from "@/lib/i18n";
 import { downloadLeadsCsv } from "@/lib/leadExports";
 import type {
-  CampaignStatus,
   CampaignDetail,
+  CampaignStatus,
   CampaignSummary,
+  ConnectLinkedInSessionRequest,
   CreateCampaignRequest,
   EnrichedLead,
   HealthResponse,
+  LinkedInSessionStatus,
   ScrapedLead,
   ScrapeJobResultsResponse,
   ScrapeJobSummary,
@@ -32,11 +35,14 @@ const selectedCampaignDetail = ref<CampaignDetail | null>(null);
 const jobs = ref<ScrapeJobSummary[]>([]);
 const selectedJobResults = ref<ScrapeJobResultsResponse | null>(null);
 const health = ref<HealthResponse | null>(null);
+const linkedinSession = ref<LinkedInSessionStatus | null>(null);
 const loadingCampaigns = ref(false);
 const loadingCampaignDetail = ref(false);
 const loadingJobs = ref(false);
 const loadingJobResults = ref(false);
+const loadingLinkedInSession = ref(false);
 const creatingCampaign = ref(false);
+const syncingLinkedInSession = ref(false);
 const campaignDrawerOpen = ref(false);
 const message = ref<string | null>(null);
 const campaignFilterQuery = ref("");
@@ -78,7 +84,7 @@ const navItems = computed(() => [
 ]);
 
 const localeOptions = [
-  { value: "zh-CN" as AppLocale, label: "简体中文" },
+  { value: "zh-CN" as AppLocale, label: "简中" },
   { value: "en" as AppLocale, label: "EN" },
 ];
 
@@ -99,7 +105,7 @@ const filteredCampaigns = computed(() => {
       return true;
     }
 
-    return [campaign.name, campaign.industry, campaign.location, campaign.query]
+    return [campaign.name, campaign.industry, campaign.location, campaign.query, t(`sources.${campaign.source}`)]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(needle));
   });
@@ -162,6 +168,23 @@ async function refreshHealth() {
     health.value = await api.getHealth();
   } catch (error) {
     setMessage(error);
+  }
+}
+
+async function refreshLinkedInSession(options: { mode?: RefreshMode } = {}) {
+  const mode = options.mode ?? "visible";
+  if (mode === "visible") {
+    loadingLinkedInSession.value = true;
+  }
+
+  try {
+    linkedinSession.value = await api.getLinkedInSession();
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    if (mode === "visible") {
+      loadingLinkedInSession.value = false;
+    }
   }
 }
 
@@ -301,6 +324,30 @@ async function createCampaign(payload: CreateCampaignRequest) {
   }
 }
 
+async function connectLinkedInSession(payload: ConnectLinkedInSessionRequest) {
+  syncingLinkedInSession.value = true;
+  try {
+    linkedinSession.value = await api.connectLinkedInSession(payload);
+    message.value = t("messages.linkedinConnected");
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    syncingLinkedInSession.value = false;
+  }
+}
+
+async function disconnectLinkedInSession() {
+  syncingLinkedInSession.value = true;
+  try {
+    linkedinSession.value = await api.disconnectLinkedInSession();
+    message.value = t("messages.linkedinDisconnected");
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    syncingLinkedInSession.value = false;
+  }
+}
+
 function setMessage(error: unknown) {
   message.value = error instanceof Error ? error.message : t("messages.unexpectedError");
 }
@@ -385,7 +432,7 @@ async function retryJob(jobId: string) {
 }
 
 async function bootstrap() {
-  await Promise.all([refreshHealth(), refreshCampaigns(), refreshJobs()]);
+  await Promise.all([refreshHealth(), refreshCampaigns(), refreshJobs(), refreshLinkedInSession()]);
   if (selectedCampaignId.value) {
     await refreshSelectedCampaign();
   }
@@ -405,6 +452,7 @@ onMounted(async () => {
         refreshHealth(),
         refreshCampaignWorkspace({ mode: "silent" }),
         refreshJobsWorkspace({ mode: "silent" }),
+        refreshLinkedInSession({ mode: "silent" }),
       ]);
     } finally {
       pollInFlight = false;
@@ -439,6 +487,7 @@ onUnmounted(() => {
       <CampaignCreationDrawer
         :open="campaignDrawerOpen"
         :busy="creatingCampaign"
+        :linkedin-connected="Boolean(linkedinSession?.connected)"
         @close="campaignDrawerOpen = false"
         @submit="createCampaign"
       />
@@ -573,6 +622,10 @@ onUnmounted(() => {
                 <dd>{{ selectedJob.max_results }}</dd>
               </div>
               <div>
+                <dt>{{ t("jobs.source") }}</dt>
+                <dd>{{ t(`sources.${selectedJob.source}`) }}</dd>
+              </div>
+              <div>
                 <dt>{{ t("jobs.returned") }}</dt>
                 <dd>{{ selectedJob.result_count }}</dd>
               </div>
@@ -594,13 +647,6 @@ onUnmounted(() => {
       </section>
 
       <section v-else class="view-grid">
-        <section class="hero-status">
-          <div v-for="card in statusCards" :key="card.label" class="hero-status-card">
-            <span class="summary-label">{{ card.label }}</span>
-            <strong>{{ card.value }}</strong>
-          </div>
-        </section>
-
         <section class="panel panel-health">
           <div class="panel-heading">
             <p class="panel-kicker">{{ t("runtime.runtimeKicker") }}</p>
@@ -626,6 +672,13 @@ onUnmounted(() => {
             </div>
           </dl>
         </section>
+
+        <LinkedInSessionCard
+          :session="linkedinSession"
+          :busy="loadingLinkedInSession || syncingLinkedInSession"
+          @connect="connectLinkedInSession"
+          @disconnect="disconnectLinkedInSession"
+        />
       </section>
     </ConsoleShell>
   </div>

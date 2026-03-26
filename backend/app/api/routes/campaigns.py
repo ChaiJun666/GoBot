@@ -11,6 +11,7 @@ from app.schemas.campaigns import (
     CreateCampaignRequest,
     CreateCampaignResponse,
 )
+from app.schemas.source_query import resolve_query_payload
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -25,11 +26,21 @@ async def create_campaign(
 
     campaign_id = str(uuid4())
     job_id = str(uuid4())
+    try:
+        resolved_query, resolved_query_config = resolve_query_payload(
+            source=payload.source,
+            query=payload.query,
+            query_config=payload.query_config,
+            fallback_location=payload.location,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     database.create_job(
         job_id=job_id,
         campaign_id=campaign_id,
-        query=payload.query,
+        query=resolved_query,
+        query_config=resolved_query_config,
         source=payload.source.value,
         max_results=payload.max_results,
     )
@@ -39,7 +50,8 @@ async def create_campaign(
         name=payload.name,
         industry=payload.industry,
         location=payload.location,
-        query=payload.query,
+        query=resolved_query,
+        query_config=resolved_query_config,
         source=payload.source.value,
         max_results=payload.max_results,
     )

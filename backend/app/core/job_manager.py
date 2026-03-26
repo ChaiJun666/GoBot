@@ -48,6 +48,7 @@ class ScrapeJobManager:
                 query=job["query"],
                 max_results=job["max_results"],
                 source=job["source"],
+                query_config=job.get("query_config"),
             )
             self.database.complete_job(job_id, results)
             if campaign is not None:

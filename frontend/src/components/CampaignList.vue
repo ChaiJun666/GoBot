@@ -2,6 +2,7 @@
 import { useI18n } from "vue-i18n";
 
 import StatusBadge from "@/components/StatusBadge.vue";
+import { describeSourceQuery } from "@/lib/sources";
 import type { CampaignStatus, CampaignSummary } from "@/types";
 
 const props = defineProps<{
@@ -42,6 +43,14 @@ function onFilterQueryInput(event: Event) {
 
 function onFilterStatusChange(event: Event) {
   emit("updateFilterStatus", (event.target as HTMLSelectElement).value as CampaignStatus | "all");
+}
+
+function getSourceLabel(campaign: CampaignSummary): string {
+  return t(`sources.${campaign.source}`);
+}
+
+function getQueryLabel(campaign: CampaignSummary): string {
+  return campaign.query || describeSourceQuery(campaign.query_config, campaign.source);
 }
 </script>
 
@@ -94,17 +103,22 @@ function onFilterStatusChange(event: Event) {
       >
         <div class="job-card-top">
           <StatusBadge :status="campaign.status" />
-          <span class="job-count">{{ campaign.priority_leads }} {{ t("campaigns.prioritySuffix") }}</span>
+          <span class="job-count">{{ getSourceLabel(campaign) }}</span>
         </div>
         <h3>{{ campaign.name }}</h3>
         <p class="job-meta">
           {{ campaign.industry }}
           <span>|</span>
           {{ campaign.location }}
-          <span>|</span>
-          {{ formatDate(campaign.created_at) }}
         </p>
         <p class="job-meta">
+          {{ formatDate(campaign.created_at) }}
+          <span>|</span>
+          {{ getQueryLabel(campaign) }}
+        </p>
+        <p class="job-meta">
+          {{ campaign.priority_leads }} {{ t("campaigns.prioritySuffix") }}
+          <span>|</span>
           {{ campaign.total_leads }} {{ t("campaigns.leadsSuffix") }}
           <span>|</span>
           {{ campaign.average_score }} {{ t("campaigns.averageScoreSuffix") }}

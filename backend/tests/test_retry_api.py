@@ -39,6 +39,7 @@ def test_retry_scrape_job_resets_failed_job_and_campaign(tmp_path: Path) -> None
         job_id="job-1",
         campaign_id="campaign-1",
         query="Best ramen Tokyo",
+        query_config={"query": "Best ramen Tokyo"},
         source="google_maps",
         max_results=10,
     )
@@ -49,6 +50,7 @@ def test_retry_scrape_job_resets_failed_job_and_campaign(tmp_path: Path) -> None
         industry="restaurant",
         location="Tokyo",
         query="Best ramen Tokyo",
+        query_config={"query": "Best ramen Tokyo"},
         source="google_maps",
         max_results=10,
     )
@@ -86,6 +88,7 @@ def test_retry_campaign_requeues_failed_campaign(tmp_path: Path) -> None:
         job_id="job-2",
         campaign_id="campaign-2",
         query="Lisbon coworking",
+        query_config={"query": "Lisbon coworking"},
         source="google_maps",
         max_results=15,
     )
@@ -96,6 +99,7 @@ def test_retry_campaign_requeues_failed_campaign(tmp_path: Path) -> None:
         industry="professional",
         location="Lisbon",
         query="Lisbon coworking",
+        query_config={"query": "Lisbon coworking"},
         source="google_maps",
         max_results=15,
     )

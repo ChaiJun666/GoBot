@@ -21,7 +21,8 @@ class CreateCampaignRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     industry: str = Field(min_length=2, max_length=40)
     location: str = Field(min_length=2, max_length=80)
-    query: str = Field(min_length=2, max_length=200)
+    query: str | None = Field(default=None, min_length=2, max_length=200)
+    query_config: dict[str, Any] | None = None
     max_results: int = Field(default=20, ge=1, le=100)
     source: ScrapeSource = ScrapeSource.GOOGLE_MAPS
 
@@ -33,6 +34,7 @@ class CampaignSummary(BaseModel):
     industry: str
     location: str
     query: str
+    query_config: dict[str, Any] | None = None
     source: ScrapeSource
     max_results: int
     status: CampaignStatus

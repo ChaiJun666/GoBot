@@ -36,6 +36,10 @@ def normalize_email(value: Any) -> str | None:
     return text.casefold()
 
 
+def normalize_profile_url(value: Any) -> str | None:
+    return normalize_website(value)
+
+
 def normalize_website(value: Any) -> str | None:
     website = normalize_text(value)
     if website is None:
@@ -47,22 +51,28 @@ def normalize_website(value: Any) -> str | None:
 
 def normalize_lead(payload: Mapping[str, Any], *, source: str) -> ScrapedLead | None:
     name = normalize_text(payload.get("name"))
-    address = normalize_text(payload.get("address"))
+    location = normalize_text(payload.get("location"))
+    address = normalize_text(payload.get("address")) or location
     if not name or not address:
         return None
 
     website = normalize_website(payload.get("website"))
     rating = normalize_text(payload.get("rating"))
+    profile_url = normalize_profile_url(payload.get("profile_url"))
     reference_link = normalize_text(
-        payload.get("reference_link") or payload.get("referenceLink")
+        payload.get("reference_link") or payload.get("referenceLink") or profile_url
     )
 
     return ScrapedLead(
         name=name,
         address=address,
+        location=location or address,
         phone=normalize_phone_number(payload.get("phone")),
         email=normalize_email(payload.get("email")),
         website=website,
+        headline=normalize_text(payload.get("headline")),
+        current_company=normalize_text(payload.get("current_company") or payload.get("company")),
+        profile_url=profile_url,
         reference_link=reference_link,
         rating=rating,
         has_website=bool(website),
@@ -75,7 +85,10 @@ def deduplicate_leads(leads: list[ScrapedLead]) -> list[ScrapedLead]:
     seen: set[tuple[str, str]] = set()
     unique: list[ScrapedLead] = []
     for lead in leads:
-        key = (lead.name.casefold(), lead.address.casefold())
+        key = (
+            (lead.profile_url or lead.reference_link or lead.name).casefold(),
+            lead.address.casefold(),
+        )
         if key in seen:
             continue
         seen.add(key)
