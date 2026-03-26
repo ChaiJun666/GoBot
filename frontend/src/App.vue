@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 
-import CampaignComposer from "@/components/CampaignComposer.vue";
+import CampaignCreationDrawer from "@/components/campaigns/CampaignCreationDrawer.vue";
+import CampaignWorkbench from "@/components/campaigns/CampaignWorkbench.vue";
 import CampaignList from "@/components/CampaignList.vue";
-import CampaignResults from "@/components/CampaignResults.vue";
 import JobList from "@/components/JobList.vue";
+import ConsoleShell from "@/components/layout/ConsoleShell.vue";
+import OperationsCenter from "@/components/jobs/OperationsCenter.vue";
 import MetricCard from "@/components/MetricCard.vue";
 import ResultTable from "@/components/ResultTable.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
+import { createConsoleWorkspace, type ConsoleView } from "@/composables/useConsoleWorkspace";
 import { api } from "@/lib/api";
+import { persistLocale, type AppLocale } from "@/lib/i18n";
 import type {
   CampaignDetail,
   CampaignSummary,
@@ -19,10 +24,8 @@ import type {
 } from "@/types";
 
 const campaigns = ref<CampaignSummary[]>([]);
-const selectedCampaignId = ref<string | null>(null);
 const selectedCampaignDetail = ref<CampaignDetail | null>(null);
 const jobs = ref<ScrapeJobSummary[]>([]);
-const selectedJobId = ref<string | null>(null);
 const selectedJobResults = ref<ScrapeJobResultsResponse | null>(null);
 const health = ref<HealthResponse | null>(null);
 const loadingCampaigns = ref(false);
@@ -30,7 +33,14 @@ const loadingCampaignDetail = ref(false);
 const loadingJobs = ref(false);
 const loadingJobResults = ref(false);
 const creatingCampaign = ref(false);
+const campaignDrawerOpen = ref(false);
 const message = ref<string | null>(null);
+const workspace = createConsoleWorkspace({ initialView: "overview" });
+const selectedCampaignId = workspace.selectedCampaignId;
+const selectedJobId = workspace.selectedJobId;
+const activeView = workspace.activeView;
+
+const { locale, t } = useI18n();
 
 let pollTimer: number | null = null;
 
@@ -44,6 +54,31 @@ const selectedCampaign = computed(
 const linkedJob = computed(
   () => jobs.value.find((job) => job.id === selectedCampaign.value?.job_id) ?? null,
 );
+
+const navItems = computed(() => [
+  { value: "overview" as ConsoleView, label: t("nav.overview") },
+  { value: "campaigns" as ConsoleView, label: t("nav.campaigns") },
+  { value: "jobs" as ConsoleView, label: t("nav.jobs") },
+  { value: "system" as ConsoleView, label: t("nav.system") },
+]);
+
+const localeOptions = [
+  { value: "zh-CN" as AppLocale, label: "简体中文" },
+  { value: "en" as AppLocale, label: "EN" },
+];
+
+const currentLocale = computed(() => locale.value as AppLocale);
+const headerTitle = computed(() => t(`views.${activeView.value}`));
+const headerSubtitle = computed(() => t("console.subtitle"));
+
+const statusCards = computed(() => [
+  { label: t("runtime.backend"), value: health.value?.status ?? t("common.unknown") },
+  {
+    label: t("runtime.database"),
+    value: health.value?.database.healthy ? t("common.healthy") : t("common.offline"),
+  },
+  { label: t("runtime.scraper"), value: health.value?.scraper.engine ?? t("common.unknown") },
+]);
 
 const totalLeadVolume = computed(() =>
   campaigns.value.reduce((sum, campaign) => sum + campaign.total_leads, 0),
@@ -77,10 +112,10 @@ const totalPriorityLeads = computed(() =>
 const activityLabel = computed(() => {
   const latest = campaigns.value[0];
   if (!latest) {
-    return "No campaign activity yet";
+    return t("overview.metrics.latestActivityEmpty");
   }
 
-  return `Latest update ${new Intl.DateTimeFormat("en-GB", {
+  return `${t("overview.metrics.latestActivityPrefix")} ${new Intl.DateTimeFormat("en-GB", {
     month: "short",
     day: "2-digit",
     hour: "2-digit",
@@ -101,6 +136,7 @@ async function refreshCampaigns(options: { preserveSelection?: boolean } = {}) {
   try {
     const payload = await api.listCampaigns();
     campaigns.value = payload;
+    workspace.setCampaigns(payload);
 
     if (!payload.length) {
       selectedCampaignId.value = null;
@@ -128,6 +164,7 @@ async function refreshJobs() {
   loadingJobs.value = true;
   try {
     jobs.value = await api.listJobs();
+    workspace.setJobs(jobs.value);
   } catch (error) {
     setMessage(error);
   } finally {
@@ -136,7 +173,7 @@ async function refreshJobs() {
 }
 
 async function selectJob(jobId: string) {
-  selectedJobId.value = jobId;
+  workspace.selectJob(jobId);
   loadingJobResults.value = true;
   try {
     selectedJobResults.value = await api.getJobResults(jobId);
@@ -148,7 +185,7 @@ async function selectJob(jobId: string) {
 }
 
 async function selectCampaign(campaignId: string) {
-  selectedCampaignId.value = campaignId;
+  workspace.selectCampaign(campaignId);
   loadingCampaignDetail.value = true;
   try {
     selectedCampaignDetail.value = await api.getCampaign(campaignId);
@@ -167,7 +204,8 @@ async function createCampaign(payload: CreateCampaignRequest) {
   creatingCampaign.value = true;
   try {
     const response = await api.createCampaign(payload);
-    message.value = `Launched campaign "${response.campaign.name}"`;
+    message.value = `${t("messages.campaignLaunchedPrefix")} "${response.campaign.name}"`;
+    campaignDrawerOpen.value = false;
     await Promise.all([refreshCampaigns(), refreshJobs()]);
     await selectCampaign(response.campaign.id);
   } catch (error) {
@@ -178,7 +216,21 @@ async function createCampaign(payload: CreateCampaignRequest) {
 }
 
 function setMessage(error: unknown) {
-  message.value = error instanceof Error ? error.message : "Unexpected error";
+  message.value = error instanceof Error ? error.message : t("messages.unexpectedError");
+}
+
+function setActiveView(view: ConsoleView) {
+  activeView.value = view;
+}
+
+function setLocale(nextLocale: AppLocale) {
+  locale.value = nextLocale;
+  persistLocale(nextLocale, window.localStorage);
+}
+
+function openCampaignView() {
+  activeView.value = "campaigns";
+  campaignDrawerOpen.value = true;
 }
 
 async function bootstrap() {
@@ -216,168 +268,197 @@ onUnmounted(() => {
     <div class="background-orbit background-orbit-a"></div>
     <div class="background-orbit background-orbit-b"></div>
 
-    <header class="hero">
-      <div>
-        <p class="hero-kicker">GoBot Console</p>
-        <h1>Run campaigns, score leads, inspect execution.</h1>
-        <p class="hero-copy">
-          The console now treats campaigns as the primary workflow. Each campaign launches
-          a scrape job, waits for lead extraction, then calculates intelligence scores so
-          you can inspect qualified prospects in one place.
-        </p>
-      </div>
-
-      <div class="hero-status">
-        <div class="hero-status-card">
-          <span class="summary-label">Backend</span>
-          <strong>{{ health?.status ?? "unknown" }}</strong>
-        </div>
-        <div class="hero-status-card">
-          <span class="summary-label">Database</span>
-          <strong>{{ health?.database.healthy ? "healthy" : "offline" }}</strong>
-        </div>
-        <div class="hero-status-card">
-          <span class="summary-label">Mode</span>
-          <strong>{{ health?.scraper.headless ? "headless" : "headed" }}</strong>
-        </div>
-      </div>
-    </header>
-
-    <main class="dashboard-grid">
-      <section class="metric-grid">
-        <MetricCard eyebrow="Total campaigns" :value="campaigns.length" :detail="activityLabel" />
-        <MetricCard eyebrow="Priority leads" :value="totalPriorityLeads" detail="High-value prospects found" />
-        <MetricCard eyebrow="Average score" :value="averageCampaignScore" detail="Across completed campaigns" />
-        <MetricCard eyebrow="In flight" :value="runningCampaigns" detail="Queued or actively processing" />
-        <MetricCard eyebrow="Lead volume" :value="totalLeadVolume" detail="All intelligence-scored leads" />
-        <MetricCard eyebrow="Failed" :value="failedCampaigns" detail="Campaigns needing review" />
-      </section>
-
-      <CampaignComposer :busy="creatingCampaign" @submit="createCampaign" />
-
-      <section class="panel panel-health">
-        <div class="panel-heading">
-          <p class="panel-kicker">Runtime</p>
-          <h2>Service health</h2>
-        </div>
-
-        <dl class="health-grid">
-          <div>
-            <dt>Database path</dt>
-            <dd>{{ health?.database.path ?? "unavailable" }}</dd>
-          </div>
-          <div>
-            <dt>Timeout</dt>
-            <dd>{{ health?.scraper.timeout_ms ?? 0 }} ms</dd>
-          </div>
-          <div>
-            <dt>Polling</dt>
-            <dd>5 seconds</dd>
-          </div>
-          <div>
-            <dt>Selected campaign</dt>
-            <dd>{{ selectedCampaign?.id?.slice(0, 8) ?? "none" }}</dd>
-          </div>
-        </dl>
-
-        <p v-if="message" class="inline-message">{{ message }}</p>
-      </section>
-
-      <CampaignList
-        :campaigns="campaigns"
-        :selected-campaign-id="selectedCampaignId"
-        :loading="loadingCampaigns"
-        @select="selectCampaign"
-        @refresh="refreshCampaigns({ preserveSelection: true })"
+    <ConsoleShell
+      :active-view="activeView"
+      :nav-items="navItems"
+      :title="headerTitle"
+      :subtitle="headerSubtitle"
+      :active-locale="currentLocale"
+      :locale-options="localeOptions"
+      :action-label="t('actions.newCampaign')"
+      @select-view="setActiveView"
+      @change-locale="setLocale"
+      @action="openCampaignView"
+    >
+      <CampaignCreationDrawer
+        :open="campaignDrawerOpen"
+        :busy="creatingCampaign"
+        @close="campaignDrawerOpen = false"
+        @submit="createCampaign"
       />
 
-      <CampaignResults :campaign="selectedCampaignDetail" :loading="loadingCampaignDetail" />
+      <section v-if="activeView === 'overview'" class="view-grid">
+        <section class="hero-status">
+          <div v-for="card in statusCards" :key="card.label" class="hero-status-card">
+            <span class="summary-label">{{ card.label }}</span>
+            <strong>{{ card.value }}</strong>
+          </div>
+        </section>
 
-      <section v-if="selectedCampaign" class="panel panel-detail">
-        <div class="panel-toolbar">
+        <section class="metric-grid">
+          <MetricCard :eyebrow="t('overview.metrics.totalCampaigns')" :value="campaigns.length" :detail="activityLabel" />
+          <MetricCard
+            :eyebrow="t('overview.metrics.priorityLeads')"
+            :value="totalPriorityLeads"
+            :detail="t('overview.metrics.priorityLeadsDetail')"
+          />
+          <MetricCard
+            :eyebrow="t('overview.metrics.averageScore')"
+            :value="averageCampaignScore"
+            :detail="t('overview.metrics.averageScoreDetail')"
+          />
+          <MetricCard
+            :eyebrow="t('overview.metrics.inFlight')"
+            :value="runningCampaigns"
+            :detail="t('overview.metrics.inFlightDetail')"
+          />
+          <MetricCard
+            :eyebrow="t('overview.metrics.leadVolume')"
+            :value="totalLeadVolume"
+            :detail="t('overview.metrics.leadVolumeDetail')"
+          />
+          <MetricCard
+            :eyebrow="t('overview.metrics.failed')"
+            :value="failedCampaigns"
+            :detail="t('overview.metrics.failedDetail')"
+          />
+        </section>
+
+        <section class="panel panel-health">
           <div class="panel-heading">
-            <p class="panel-kicker">Selected</p>
-            <h2>Campaign detail</h2>
+            <p class="panel-kicker">{{ t("runtime.runtimeKicker") }}</p>
+            <h2>{{ t("runtime.serviceHealth") }}</h2>
           </div>
-          <StatusBadge :status="selectedCampaign.status" />
-        </div>
-        <dl class="detail-grid">
-          <div>
-            <dt>Name</dt>
-            <dd>{{ selectedCampaign.name }}</dd>
-          </div>
-          <div>
-            <dt>Industry</dt>
-            <dd>{{ selectedCampaign.industry }}</dd>
-          </div>
-          <div>
-            <dt>Location</dt>
-            <dd>{{ selectedCampaign.location }}</dd>
-          </div>
-          <div>
-            <dt>Query</dt>
-            <dd>{{ selectedCampaign.query }}</dd>
-          </div>
-          <div>
-            <dt>Job id</dt>
-            <dd>{{ selectedCampaign.job_id }}</dd>
-          </div>
-          <div>
-            <dt>Leads</dt>
-            <dd>{{ selectedCampaign.total_leads }}</dd>
-          </div>
-        </dl>
+
+          <dl class="health-grid">
+            <div>
+              <dt>{{ t("runtime.databasePath") }}</dt>
+              <dd>{{ health?.database.path ?? t("common.unknown") }}</dd>
+            </div>
+            <div>
+              <dt>{{ t("runtime.timeout") }}</dt>
+              <dd>{{ health?.scraper.timeout_ms ?? 0 }} ms</dd>
+            </div>
+            <div>
+              <dt>{{ t("runtime.tlsVerify") }}</dt>
+              <dd>{{ health?.scraper.verify_tls ? t("common.enabled") : t("common.disabled") }}</dd>
+            </div>
+            <div>
+              <dt>{{ t("runtime.polling") }}</dt>
+              <dd>5 seconds</dd>
+            </div>
+          </dl>
+
+          <p v-if="message" class="inline-message">{{ message }}</p>
+        </section>
       </section>
 
-      <JobList
-        :jobs="jobs"
-        :selected-job-id="selectedJobId"
-        :loading="loadingJobs"
-        @select="selectJob"
-        @refresh="refreshJobs"
-      />
+      <section v-else-if="activeView === 'campaigns'" class="view-grid">
+        <CampaignList
+          :campaigns="campaigns"
+          :selected-campaign-id="selectedCampaignId"
+          :loading="loadingCampaigns"
+          @select="selectCampaign"
+          @refresh="refreshCampaigns({ preserveSelection: true })"
+        />
 
-      <section class="panel panel-detail">
-        <div class="panel-toolbar">
-          <div class="panel-heading">
-            <p class="panel-kicker">Telemetry</p>
-            <h2>Linked execution job</h2>
-          </div>
-          <StatusBadge v-if="linkedJob" :status="linkedJob.status" />
-        </div>
-        <dl v-if="linkedJob" class="detail-grid">
-          <div>
-            <dt>Job id</dt>
-            <dd>{{ linkedJob.id }}</dd>
-          </div>
-          <div>
-            <dt>Campaign link</dt>
-            <dd>{{ linkedJob.campaign_id ?? "unlinked" }}</dd>
-          </div>
-          <div>
-            <dt>Created</dt>
-            <dd>{{ linkedJob.created_at }}</dd>
-          </div>
-          <div>
-            <dt>Completed</dt>
-            <dd>{{ linkedJob.completed_at ?? "Pending" }}</dd>
-          </div>
-          <div>
-            <dt>Requested</dt>
-            <dd>{{ linkedJob.max_results }}</dd>
-          </div>
-          <div>
-            <dt>Returned</dt>
-            <dd>{{ linkedJob.result_count }}</dd>
-          </div>
-        </dl>
-        <div v-else class="empty-state compact-empty">
-          <p>No linked job selected.</p>
-          <span>Select a campaign or raw job to inspect execution details.</span>
-        </div>
+        <CampaignWorkbench
+          :campaign="selectedCampaignDetail"
+          :linked-job="linkedJob"
+          :loading="loadingCampaignDetail"
+        />
       </section>
 
-      <ResultTable :payload="selectedJobResults" :loading="loadingJobResults" />
-    </main>
+      <section v-else-if="activeView === 'jobs'" class="view-grid">
+        <OperationsCenter>
+          <JobList
+            :jobs="jobs"
+            :selected-job-id="selectedJobId"
+            :loading="loadingJobs"
+            @select="selectJob"
+            @refresh="refreshJobs"
+          />
+
+          <section class="panel panel-detail">
+            <div class="panel-toolbar">
+              <div class="panel-heading">
+                <p class="panel-kicker">{{ t("jobs.telemetryKicker") }}</p>
+                <h2>{{ t("jobs.telemetryTitle") }}</h2>
+              </div>
+              <StatusBadge v-if="linkedJob" :status="linkedJob.status" />
+            </div>
+            <dl v-if="linkedJob" class="detail-grid">
+              <div>
+                <dt>{{ t("campaigns.detail.jobId") }}</dt>
+                <dd>{{ linkedJob.id }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("jobs.campaignLink") }}</dt>
+                <dd>{{ linkedJob.campaign_id ?? t("common.unlinked") }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("jobs.created") }}</dt>
+                <dd>{{ linkedJob.created_at }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("jobs.completed") }}</dt>
+                <dd>{{ linkedJob.completed_at ?? t("common.pending") }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("jobs.requested") }}</dt>
+                <dd>{{ linkedJob.max_results }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("jobs.returned") }}</dt>
+                <dd>{{ linkedJob.result_count }}</dd>
+              </div>
+            </dl>
+            <div v-else class="empty-state compact-empty">
+              <p>{{ t("common.noLinkedJobSelected") }}</p>
+              <span>{{ t("campaigns.telemetryEmptyDescription") }}</span>
+            </div>
+          </section>
+
+          <ResultTable :payload="selectedJobResults" :loading="loadingJobResults" />
+        </OperationsCenter>
+      </section>
+
+      <section v-else class="view-grid">
+        <section class="hero-status">
+          <div v-for="card in statusCards" :key="card.label" class="hero-status-card">
+            <span class="summary-label">{{ card.label }}</span>
+            <strong>{{ card.value }}</strong>
+          </div>
+        </section>
+
+        <section class="panel panel-health">
+          <div class="panel-heading">
+            <p class="panel-kicker">{{ t("runtime.runtimeKicker") }}</p>
+            <h2>{{ t("runtime.systemDetails") }}</h2>
+          </div>
+
+          <dl class="health-grid">
+            <div>
+              <dt>{{ t("runtime.databasePath") }}</dt>
+              <dd>{{ health?.database.path ?? t("common.unknown") }}</dd>
+            </div>
+            <div>
+              <dt>{{ t("runtime.timeout") }}</dt>
+              <dd>{{ health?.scraper.timeout_ms ?? 0 }} ms</dd>
+            </div>
+            <div>
+              <dt>{{ t("runtime.tlsVerify") }}</dt>
+              <dd>{{ health?.scraper.verify_tls ? t("common.enabled") : t("common.disabled") }}</dd>
+            </div>
+            <div>
+              <dt>{{ t("runtime.selectedCampaign") }}</dt>
+              <dd>{{ selectedCampaign?.id?.slice(0, 8) ?? t("common.none") }}</dd>
+            </div>
+          </dl>
+
+          <p v-if="message" class="inline-message">{{ message }}</p>
+        </section>
+      </section>
+    </ConsoleShell>
   </div>
 </template>

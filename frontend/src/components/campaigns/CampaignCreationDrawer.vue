@@ -1,0 +1,132 @@
+<script setup lang="ts">
+import { computed, reactive } from "vue";
+import { useI18n } from "vue-i18n";
+
+import type { CreateCampaignRequest } from "@/types";
+
+const props = defineProps<{
+  open: boolean;
+  busy: boolean;
+}>();
+
+const emit = defineEmits<{
+  close: [];
+  submit: [payload: CreateCampaignRequest];
+}>();
+
+const { t } = useI18n();
+
+const form = reactive<CreateCampaignRequest>({
+  name: "",
+  industry: "professional",
+  location: "Jakarta",
+  query: "",
+  max_results: 20,
+  source: "google_maps",
+});
+
+const canSubmit = computed(
+  () => Boolean(form.name.trim() && form.query.trim() && form.location.trim()) && !props.busy,
+);
+
+function handleSubmit() {
+  if (!canSubmit.value) {
+    return;
+  }
+
+  emit("submit", {
+    name: form.name.trim(),
+    industry: form.industry,
+    location: form.location.trim(),
+    query: form.query.trim(),
+    max_results: form.max_results,
+    source: form.source,
+  });
+}
+</script>
+
+<template>
+  <div v-if="open" class="drawer-backdrop" @click.self="$emit('close')">
+    <aside class="drawer-panel panel" aria-label="Campaign creation drawer">
+      <div class="panel-toolbar">
+        <div class="panel-heading">
+          <p class="panel-kicker">{{ t("campaignCreate.kicker") }}</p>
+          <h2>{{ t("campaignCreate.title") }}</h2>
+        </div>
+        <button class="ghost-button" type="button" @click="$emit('close')">
+          {{ t("actions.close") }}
+        </button>
+      </div>
+
+      <p class="drawer-copy">{{ t("campaignCreate.description") }}</p>
+
+      <form class="composer-form" @submit.prevent="handleSubmit">
+        <label>
+          <span>{{ t("campaignCreate.name") }}</span>
+          <input
+            v-model="form.name"
+            type="text"
+            maxlength="120"
+            :placeholder="t('campaignCreate.namePlaceholder')"
+            required
+          />
+        </label>
+
+        <div class="composer-grid composer-grid-wide">
+          <label>
+            <span>{{ t("campaignCreate.industry") }}</span>
+            <select v-model="form.industry">
+              <option value="restaurant">{{ t("campaignCreate.industryOptions.restaurant") }}</option>
+              <option value="automotive">{{ t("campaignCreate.industryOptions.automotive") }}</option>
+              <option value="retail">{{ t("campaignCreate.industryOptions.retail") }}</option>
+              <option value="professional">{{ t("campaignCreate.industryOptions.professional") }}</option>
+              <option value="healthcare">{{ t("campaignCreate.industryOptions.healthcare") }}</option>
+              <option value="education">{{ t("campaignCreate.industryOptions.education") }}</option>
+              <option value="realestate">{{ t("campaignCreate.industryOptions.realestate") }}</option>
+            </select>
+          </label>
+
+          <label>
+            <span>{{ t("campaignCreate.location") }}</span>
+            <input
+              v-model="form.location"
+              type="text"
+              maxlength="80"
+              :placeholder="t('campaignCreate.locationPlaceholder')"
+              required
+            />
+          </label>
+
+          <label>
+            <span>{{ t("campaignCreate.maxResults") }}</span>
+            <input v-model.number="form.max_results" type="number" min="1" max="100" />
+          </label>
+        </div>
+
+        <label>
+          <span>{{ t("campaignCreate.query") }}</span>
+          <textarea
+            v-model="form.query"
+            rows="4"
+            maxlength="200"
+            :placeholder="t('campaignCreate.queryPlaceholder')"
+            required
+          />
+        </label>
+
+        <section class="drawer-review">
+          <p class="summary-label">{{ t("campaignCreate.reviewTitle") }}</p>
+          <p>{{ t("campaignCreate.reviewDescription") }}</p>
+        </section>
+
+        <button
+          class="action-button"
+          :disabled="!canSubmit"
+          type="submit"
+        >
+          {{ busy ? t("actions.launching") : t("actions.launch") }}
+        </button>
+      </form>
+    </aside>
+  </div>
+</template>

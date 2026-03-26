@@ -1,6 +1,6 @@
 # GoBot
 
-GoBot 是一个正在重构中的线索发现与 campaign intelligence 控制台，当前技术栈为：
+GoBot 是一个正在重构中的线索发现与 Campaign Intelligence 控制台，当前技术栈包括：
 
 - `Python 3.12`
 - `uv`
@@ -9,41 +9,44 @@ GoBot 是一个正在重构中的线索发现与 campaign intelligence 控制台
 - `Scrapling`
 - `SQLite`
 
-该项目目前处于迁移阶段。旧仓库 `business-leads-ai-automation` 只作为业务逻辑参考，所有新实现都在当前仓库中完成。
+项目目前仍处于迁移阶段。旧仓库 `business-leads-ai-automation` 只作为逻辑参考，所有新的实现都放在当前仓库中。
 
 英文文档见 [README.md](README.md)。
 
 ## 当前状态
 
-已实现的能力：
+目前已经实现：
 
 - 基于 FastAPI 的后端服务
-- 基于 SQLite 的任务和结果持久化
+- 基于 SQLite 的任务与结果持久化
 - 基于 Scrapling 的 Google Maps 抓取
-- `scrape job` 生命周期管理：`queued`、`running`、`completed`、`failed`
-- 与 `scrape job` 关联的 `campaign` 领域模型
-- campaign 结果的 lead intelligence 评分
-- 基于 Vue 3 的前端控制台，支持：
-  - 发起 campaign
-  - 查看 campaign 队列
-  - 查看 intelligence 评分后的 leads
-  - 查看底层执行 job 与服务健康状态
+- `scrape_job` 生命周期管理：`queued`、`running`、`completed`、`failed`
+- 与抓取任务关联的 `campaign` 模型
+- 线索的 intelligence 评分与活动汇总指标
+- 基于 Vue 3 的新控制台工作区：
+  - `Overview`
+  - `Campaigns`
+  - `Jobs`
+  - `System`
+- 抽屉式活动创建流程
+- `en` / `zh-CN` 双语界面支持
 - FastAPI 直接托管前端构建产物
 
-尚未实现的能力：
+尚未实现：
 
 - CRM 集成
 - 外呼或营销自动化
 - 邮件或 WhatsApp 内容生成
 - Google Maps 之外的多数据源抓取
-- 更完整的高级分析能力
+- 登录鉴权与多用户隔离
 
 ## 仓库结构
 
 ```text
 GoBot/
-|-- backend/                  # FastAPI、领域逻辑、测试
+|-- backend/                  # FastAPI 应用、领域逻辑、测试
 |-- frontend/                 # Vue 3 + Vite 前端
+|-- docs/plans/               # 实施计划文档
 |-- .env.example
 |-- README.md
 `-- README_CN.md
@@ -68,52 +71,52 @@ backend/app/
 - `campaign` 的创建与查询
 - 关联 `scrape_job` 的执行
 - 通过 Scrapling 抓取 Google Maps
-- 将 jobs 与 campaign 结果持久化到 SQLite
-- 对 leads 做 intelligence 评分并生成 summary
-- 在存在前端构建产物时直接提供静态资源服务
+- SQLite 持久化任务与活动结果
+- 线索归一化、去重、评分与汇总
+- 在存在前端构建产物时直接提供静态资源
 
 关键文件：
 
 - [backend/app/main.py](backend/app/main.py)
 - [backend/app/api/routes/campaigns.py](backend/app/api/routes/campaigns.py)
 - [backend/app/api/routes/scrape_jobs.py](backend/app/api/routes/scrape_jobs.py)
+- [backend/app/api/routes/health.py](backend/app/api/routes/health.py)
 - [backend/app/core/database.py](backend/app/core/database.py)
 - [backend/app/core/job_manager.py](backend/app/core/job_manager.py)
-- [backend/app/services/scraping/providers/google_maps.py](backend/app/services/scraping/providers/google_maps.py)
+- [backend/app/services/scraping/normalizers.py](backend/app/services/scraping/normalizers.py)
 - [backend/app/services/intelligence/scoring.py](backend/app/services/intelligence/scoring.py)
 
 ### 前端
 
-前端目前采用 “campaign 优先” 的信息架构，把 campaign 作为主工作流，同时保留原始 scrape job 作为执行遥测视图。
+前端现在采用“Campaign 优先”的工作区结构：
 
-主要界面包括：
-
-- campaign 创建表单
-- campaign 队列
-- campaign intelligence 结果表格
-- 关联 scrape job 详情
-- 后端健康状态卡片
+- `Overview`：展示系统健康度与队列概览
+- `Campaigns`：主工作台，包含活动队列、选中活动摘要与已评分线索
+- `Jobs`：运行中心，查看原始任务与原始结果
+- `System`：查看运行时细节
+- `New Campaign` 以抽屉形式打开，而不是长期占据主屏
+- 支持 `en` 与 `zh-CN`，会根据浏览器语言和本地存储自动选择语言
 
 关键文件：
 
 - [frontend/src/App.vue](frontend/src/App.vue)
-- [frontend/src/components/CampaignComposer.vue](frontend/src/components/CampaignComposer.vue)
-- [frontend/src/components/CampaignList.vue](frontend/src/components/CampaignList.vue)
-- [frontend/src/components/CampaignResults.vue](frontend/src/components/CampaignResults.vue)
-- [frontend/src/lib/api.ts](frontend/src/lib/api.ts)
+- [frontend/src/lib/i18n.ts](frontend/src/lib/i18n.ts)
+- [frontend/src/composables/useConsoleWorkspace.ts](frontend/src/composables/useConsoleWorkspace.ts)
+- [frontend/src/components/layout/ConsoleShell.vue](frontend/src/components/layout/ConsoleShell.vue)
+- [frontend/src/components/campaigns/CampaignCreationDrawer.vue](frontend/src/components/campaigns/CampaignCreationDrawer.vue)
+- [frontend/src/components/campaigns/CampaignWorkbench.vue](frontend/src/components/campaigns/CampaignWorkbench.vue)
+- [frontend/src/components/jobs/OperationsCenter.vue](frontend/src/components/jobs/OperationsCenter.vue)
 
 ## 运行前准备
-
-需要安装：
 
 - Python `3.12`
 - Node.js `22+`
 - `uv`
 - `pnpm`
 
-如果你本机的 `uv` cache 目录存在权限问题，建议在 `uv` 命令中继续带上 `--no-cache`。
+如果本机 `uv` cache 目录有权限问题，建议继续使用 `--no-cache`。
 
-当前抓取流程不会启动浏览器。`playwright` Python 包仍然保留在后端依赖中，只是因为 `Scrapling 0.4.2` 运行时会内部导入它。
+当前抓取流程不会启动浏览器。`playwright` 仍保留在后端依赖中，是因为 `Scrapling 0.4.2` 内部仍会导入它。
 
 ## 环境配置
 
@@ -194,19 +197,17 @@ uv run --no-cache main.py
 
 ## API 概览
 
-当前 API 包括：
-
-### 健康检查
+### Health
 
 - `GET /api/v1/health`
 
-### Campaign
+### Campaigns
 
 - `POST /api/v1/campaigns`
 - `GET /api/v1/campaigns`
 - `GET /api/v1/campaigns/{campaign_id}`
 
-### Scrape Job
+### Scrape Jobs
 
 - `POST /api/v1/scrape-jobs`
 - `GET /api/v1/scrape-jobs`
@@ -226,13 +227,13 @@ uv run --no-cache main.py
 }
 ```
 
-提交一个 campaign 后，系统会按如下流程执行：
+提交一个 `campaign` 后，系统会按以下流程执行：
 
-1. 创建 campaign 记录
-2. 创建关联的 scrape job
+1. 创建活动记录
+2. 创建关联的抓取任务
 3. 异步执行抓取
 4. 对抓取结果进行 intelligence 评分
-5. 将 enrich 后的 campaign 结果写入 SQLite
+5. 将 enrich 后的活动结果写入 SQLite
 
 ## 验证命令
 
@@ -241,30 +242,35 @@ uv run --no-cache main.py
 ```powershell
 cd backend
 python -m compileall .
+uv run --no-cache pytest tests/test_health_api.py -v --basetemp=.pytest-tmp
 ```
 
 前端验证：
 
 ```powershell
 cd frontend
-pnpm.cmd exec vue-tsc --noEmit
+pnpm.cmd test:unit
 pnpm.cmd build
 ```
 
-当前已覆盖的测试方向：
+当前前端测试已覆盖：
 
-- 数据库存储
-- lead 归一化
-- intelligence 评分
+- i18n 初始化与语言解析
+- console workspace 状态层
+- console shell 渲染
+- 活动创建抽屉行为
+- 活动工作台渲染
+- 运行中心渲染
 
 ## 已知限制
 
 - 当前只支持 Google Maps 抓取
-- 如果 Google Maps 内部 payload 结构变化，解析逻辑可能需要更新
-- `SCRAPER_VERIFY_TLS=false` 是为了绕过部分 Windows 环境下 `curl_cffi` 证书链校验失败的默认设置
-- 当前前端重点是 campaign 与执行遥测，不是完整 BI 仪表盘
-- 还没有认证、多用户隔离或权限控制
-- 项目仍处于迁移中，部分命名和边界后续可能继续调整
+- 如果 Google Maps 内部 payload 结构变化，解析逻辑可能需要调整
+- `SCRAPER_VERIFY_TLS=false` 仍是部分 Windows 环境下的实用默认值，用于绕过 `curl_cffi` 证书链校验失败
+- 界面已经支持双语，但历史组件仍可能有少量未完全本地化的文案
+- 还没有登录认证、多用户隔离与权限控制
+- 项目仍处于迁移中，命名和边界后续可能继续调整
+- 后端全量 `pytest` 在部分 Windows 环境下可能受临时目录权限影响
 
 ## 许可证
 

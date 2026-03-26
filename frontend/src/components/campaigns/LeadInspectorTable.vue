@@ -2,7 +2,6 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
-import StatusBadge from "@/components/StatusBadge.vue";
 import type { CampaignDetail } from "@/types";
 
 const props = defineProps<{
@@ -40,30 +39,12 @@ const filteredResults = computed(() => {
 
 <template>
   <section class="panel panel-results">
-    <div class="panel-toolbar">
-      <div class="panel-heading">
-        <p class="panel-kicker">{{ t("legacy.campaignResults.kicker") }}</p>
-        <h2>{{ t("campaigns.leadReviewTitle") }}</h2>
-      </div>
-      <StatusBadge v-if="campaign" :status="campaign.status" />
+    <div class="panel-heading">
+      <p class="panel-kicker">{{ t("campaigns.leadReviewKicker") }}</p>
+      <h2>{{ t("campaigns.leadReviewTitle") }}</h2>
     </div>
 
     <template v-if="campaign">
-      <div class="results-summary">
-        <div>
-          <span class="summary-label">{{ t("legacy.campaignResults.campaign") }}</span>
-          <strong>{{ campaign.name }}</strong>
-        </div>
-        <div>
-          <span class="summary-label">{{ t("campaigns.detail.priorityLeads") }}</span>
-          <strong>{{ campaign.priority_leads }}</strong>
-        </div>
-        <div>
-          <span class="summary-label">{{ t("campaigns.detail.averageScore") }}</span>
-          <strong>{{ campaign.average_score }}</strong>
-        </div>
-      </div>
-
       <label class="filter-field">
         <span>{{ t("campaigns.filterLeads") }}</span>
         <input

@@ -109,7 +109,8 @@ export interface HealthResponse {
     healthy: boolean;
   };
   scraper: {
-    headless: boolean;
+    engine: string;
     timeout_ms: number;
+    verify_tls: boolean;
   };
 }

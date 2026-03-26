@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive } from "vue";
+import { useI18n } from "vue-i18n";
 
 import type { CreateCampaignRequest } from "@/types";
 
@@ -10,6 +11,8 @@ defineProps<{
 const emit = defineEmits<{
   submit: [payload: CreateCampaignRequest];
 }>();
+
+const { t } = useI18n();
 
 const form = reactive<CreateCampaignRequest>({
   name: "",
@@ -35,53 +38,53 @@ function handleSubmit() {
 <template>
   <section class="panel panel-form">
     <div class="panel-heading">
-      <p class="panel-kicker">Campaigns</p>
-      <h2>Launch an intelligence run</h2>
+      <p class="panel-kicker">{{ t("legacy.campaignComposer.kicker") }}</p>
+      <h2>{{ t("campaignCreate.title") }}</h2>
     </div>
     <form class="composer-form" @submit.prevent="handleSubmit">
       <label>
-        <span>Campaign name</span>
-        <input v-model="form.name" type="text" maxlength="120" placeholder="Jakarta coffee market" required />
+        <span>{{ t("campaignCreate.name") }}</span>
+        <input v-model="form.name" type="text" maxlength="120" :placeholder="t('campaignCreate.namePlaceholder')" required />
       </label>
 
       <div class="composer-grid composer-grid-wide">
         <label>
-          <span>Industry</span>
+          <span>{{ t("campaignCreate.industry") }}</span>
           <select v-model="form.industry">
-            <option value="restaurant">Restaurant</option>
-            <option value="automotive">Automotive</option>
-            <option value="retail">Retail</option>
-            <option value="professional">Professional</option>
-            <option value="healthcare">Healthcare</option>
-            <option value="education">Education</option>
-            <option value="realestate">Real estate</option>
+            <option value="restaurant">{{ t("campaignCreate.industryOptions.restaurant") }}</option>
+            <option value="automotive">{{ t("campaignCreate.industryOptions.automotive") }}</option>
+            <option value="retail">{{ t("campaignCreate.industryOptions.retail") }}</option>
+            <option value="professional">{{ t("campaignCreate.industryOptions.professional") }}</option>
+            <option value="healthcare">{{ t("campaignCreate.industryOptions.healthcare") }}</option>
+            <option value="education">{{ t("campaignCreate.industryOptions.education") }}</option>
+            <option value="realestate">{{ t("campaignCreate.industryOptions.realestate") }}</option>
           </select>
         </label>
 
         <label>
-          <span>Location</span>
-          <input v-model="form.location" type="text" maxlength="80" placeholder="Jakarta" required />
+          <span>{{ t("campaignCreate.location") }}</span>
+          <input v-model="form.location" type="text" maxlength="80" :placeholder="t('campaignCreate.locationPlaceholder')" required />
         </label>
 
         <label>
-          <span>Max results</span>
+          <span>{{ t("campaignCreate.maxResults") }}</span>
           <input v-model.number="form.max_results" type="number" min="1" max="100" />
         </label>
       </div>
 
       <label>
-        <span>Search query</span>
+        <span>{{ t("campaignCreate.query") }}</span>
         <textarea
           v-model="form.query"
           rows="4"
           maxlength="200"
-          placeholder="Coffee shops Jakarta Selatan"
+          :placeholder="t('campaignCreate.queryPlaceholder')"
           required
         />
       </label>
 
       <button class="action-button" :disabled="busy || !form.name.trim() || !form.query.trim()" type="submit">
-        {{ busy ? "Launching..." : "Launch campaign" }}
+        {{ busy ? t("actions.launching") : t("actions.launch") }}
       </button>
     </form>
   </section>

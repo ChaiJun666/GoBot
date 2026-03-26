@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 
 import StatusBadge from "@/components/StatusBadge.vue";
 import type { ScrapeJobResultsResponse } from "@/types";
@@ -10,6 +11,7 @@ const props = defineProps<{
 }>();
 
 const filterText = ref("");
+const { t } = useI18n();
 
 const filteredResults = computed(() => {
   if (!props.payload) {
@@ -45,8 +47,8 @@ function formatDate(value: string | null): string {
   <section class="panel panel-results">
     <div class="panel-toolbar">
       <div class="panel-heading">
-        <p class="panel-kicker">Inspect</p>
-        <h2>Results</h2>
+        <p class="panel-kicker">{{ t("jobs.resultsKicker") }}</p>
+        <h2>{{ t("jobs.resultsTitle") }}</h2>
       </div>
       <StatusBadge v-if="payload" :status="payload.job.status" />
     </div>
@@ -54,33 +56,33 @@ function formatDate(value: string | null): string {
     <template v-if="payload">
       <div class="results-summary">
         <div>
-          <span class="summary-label">Query</span>
+          <span class="summary-label">{{ t("jobs.query") }}</span>
           <strong>{{ payload.job.query }}</strong>
         </div>
         <div>
-          <span class="summary-label">Created</span>
+          <span class="summary-label">{{ t("jobs.created") }}</span>
           <strong>{{ formatDate(payload.job.created_at) }}</strong>
         </div>
         <div>
-          <span class="summary-label">Leads</span>
+          <span class="summary-label">{{ t("jobs.leads") }}</span>
           <strong>{{ payload.results.length }}</strong>
         </div>
       </div>
 
       <label class="filter-field">
-        <span>Filter leads</span>
-        <input v-model="filterText" type="search" placeholder="Search name, address, phone, website" />
+        <span>{{ t("jobs.filterLeads") }}</span>
+        <input v-model="filterText" type="search" :placeholder="t('jobs.filterPlaceholder')" />
       </label>
 
       <div v-if="filteredResults.length" class="table-shell">
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Address</th>
-              <th>Phone</th>
-              <th>Rating</th>
-              <th>Website</th>
+              <th>{{ t("jobs.table.name") }}</th>
+              <th>{{ t("jobs.table.address") }}</th>
+              <th>{{ t("jobs.table.phone") }}</th>
+              <th>{{ t("jobs.table.rating") }}</th>
+              <th>{{ t("jobs.table.website") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -91,7 +93,7 @@ function formatDate(value: string | null): string {
               <td>{{ lead.rating || "-" }}</td>
               <td>
                 <a v-if="lead.website" :href="lead.website" target="_blank" rel="noreferrer">
-                  Visit
+                  {{ t("common.visit") }}
                 </a>
                 <span v-else>-</span>
               </td>
@@ -100,14 +102,14 @@ function formatDate(value: string | null): string {
         </table>
       </div>
       <div v-else class="empty-state">
-        <p>No matching leads.</p>
-        <span>Try a different filter or wait for the job to complete.</span>
+        <p>{{ t("jobs.emptyFilteredTitle") }}</p>
+        <span>{{ t("jobs.emptyFilteredDescription") }}</span>
       </div>
     </template>
 
     <div v-else class="empty-state">
-      <p>{{ loading ? "Loading job..." : "No job selected." }}</p>
-      <span>Select a job from the queue to inspect its leads.</span>
+      <p>{{ loading ? t("common.loadingJob") : t("common.noJobSelected") }}</p>
+      <span>{{ t("jobs.emptyResultsDescription") }}</span>
     </div>
   </section>
 </template>

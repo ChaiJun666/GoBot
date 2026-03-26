@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
+
 import StatusBadge from "@/components/StatusBadge.vue";
 import type { ScrapeJobSummary } from "@/types";
 
@@ -13,9 +15,11 @@ defineEmits<{
   refresh: [];
 }>();
 
+const { t } = useI18n();
+
 function formatDate(value: string | null): string {
   if (!value) {
-    return "Not started";
+    return t("common.notStarted");
   }
 
   return new Intl.DateTimeFormat("en-GB", {
@@ -31,11 +35,11 @@ function formatDate(value: string | null): string {
   <section class="panel">
     <div class="panel-toolbar">
       <div class="panel-heading">
-        <p class="panel-kicker">Queue</p>
-        <h2>Recent jobs</h2>
+        <p class="panel-kicker">{{ t("jobs.queueKicker") }}</p>
+        <h2>{{ t("jobs.queueTitle") }}</h2>
       </div>
-      <button class="ghost-button" @click="$emit('refresh')">
-        {{ loading ? "Refreshing..." : "Refresh" }}
+      <button class="ghost-button" type="button" @click="$emit('refresh')">
+        {{ loading ? `${t("actions.refresh")}...` : t("actions.refresh") }}
       </button>
     </div>
 
@@ -45,25 +49,26 @@ function formatDate(value: string | null): string {
         :key="job.id"
         class="job-card"
         :class="{ selected: job.id === selectedJobId }"
+        type="button"
         @click="$emit('select', job.id)"
       >
         <div class="job-card-top">
           <StatusBadge :status="job.status" />
-          <span class="job-count">{{ job.result_count }} leads</span>
+          <span class="job-count">{{ job.result_count }} {{ t("jobs.leadsSuffix") }}</span>
         </div>
         <h3>{{ job.query }}</h3>
         <p class="job-meta">
           {{ formatDate(job.created_at) }}
-          <span>·</span>
-          {{ job.max_results }} requested
+          <span>|</span>
+          {{ job.max_results }} {{ t("jobs.requestedSuffix") }}
         </p>
         <p v-if="job.error_message" class="job-error">{{ job.error_message }}</p>
       </button>
     </div>
 
     <div v-else class="empty-state">
-      <p>No jobs yet.</p>
-      <span>Launch a scrape run to populate the console.</span>
+      <p>{{ t("jobs.queueEmptyTitle") }}</p>
+      <span>{{ t("jobs.queueEmptyDescription") }}</span>
     </div>
   </section>
 </template>
