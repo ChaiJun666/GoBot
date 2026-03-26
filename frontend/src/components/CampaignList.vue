@@ -3,7 +3,7 @@ import { useI18n } from "vue-i18n";
 
 import StatusBadge from "@/components/StatusBadge.vue";
 import { describeSourceQuery } from "@/lib/sources";
-import type { CampaignStatus, CampaignSummary } from "@/types";
+import type { CampaignStatus, CampaignSummary, ScrapeSource } from "@/types";
 
 const props = defineProps<{
   campaigns: CampaignSummary[];
@@ -11,6 +11,7 @@ const props = defineProps<{
   loading: boolean;
   filterQuery: string;
   filterStatus: CampaignStatus | "all";
+  filterSource: ScrapeSource | "all";
   totalCampaigns: number;
 }>();
 
@@ -19,17 +20,19 @@ const emit = defineEmits<{
   refresh: [];
   updateFilterQuery: [value: string];
   updateFilterStatus: [value: CampaignStatus | "all"];
+  updateFilterSource: [value: ScrapeSource | "all"];
 }>();
 
 const { t } = useI18n();
 const statusOptions: Array<CampaignStatus | "all"> = ["all", "queued", "running", "completed", "failed"];
+const sourceOptions: Array<ScrapeSource | "all"> = ["all", "google_maps", "linkedin"];
 
 function formatDate(value: string | null): string {
   if (!value) {
     return t("common.notStarted");
   }
 
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "2-digit",
     hour: "2-digit",
@@ -43,6 +46,10 @@ function onFilterQueryInput(event: Event) {
 
 function onFilterStatusChange(event: Event) {
   emit("updateFilterStatus", (event.target as HTMLSelectElement).value as CampaignStatus | "all");
+}
+
+function onFilterSourceChange(event: Event) {
+  emit("updateFilterSource", (event.target as HTMLSelectElement).value as ScrapeSource | "all");
 }
 
 function getSourceLabel(campaign: CampaignSummary): string {
@@ -66,7 +73,7 @@ function getQueryLabel(campaign: CampaignSummary): string {
       </button>
     </div>
 
-    <div class="inline-filter-grid">
+    <div class="inline-filter-grid inline-filter-grid-3">
       <label class="filter-field">
         <span>{{ t("filters.searchCampaignsLabel") }}</span>
         <input
@@ -85,6 +92,15 @@ function getQueryLabel(campaign: CampaignSummary): string {
         >
           <option v-for="status in statusOptions" :key="status" :value="status">
             {{ status === "all" ? t("filters.allStatuses") : t(`status.${status}`) }}
+          </option>
+        </select>
+      </label>
+
+      <label class="filter-field">
+        <span>{{ t("filters.sourceLabel") }}</span>
+        <select :value="filterSource" @change="onFilterSourceChange">
+          <option v-for="source in sourceOptions" :key="source" :value="source">
+            {{ source === "all" ? t("filters.allSources") : t(`sources.${source}`) }}
           </option>
         </select>
       </label>

@@ -4,6 +4,7 @@ import type { ConsoleView } from "@/composables/useConsoleWorkspace";
 interface NavItem {
   value: ConsoleView;
   label: string;
+  hint?: string;
 }
 
 defineProps<{
@@ -26,7 +27,8 @@ defineEmits<{
       type="button"
       @click="$emit('select', item.value)"
     >
-      {{ item.label }}
+      <span class="primary-nav-label">{{ item.label }}</span>
+      <span v-if="item.hint" class="primary-nav-hint">{{ item.hint }}</span>
     </button>
   </nav>
 </template>

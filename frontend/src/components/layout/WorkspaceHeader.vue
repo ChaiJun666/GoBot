@@ -12,6 +12,7 @@ defineProps<{
   activeLocale: AppLocale;
   localeOptions: LocaleOption[];
   actionLabel: string;
+  meta?: string;
 }>();
 
 defineEmits<{
@@ -22,8 +23,11 @@ defineEmits<{
 
 <template>
   <header class="workspace-header">
-    <div>
-      <p class="hero-kicker">GoBot Console</p>
+    <div class="workspace-copy">
+      <div class="workspace-eyebrow-row">
+        <p class="hero-kicker">GoBot Console</p>
+        <span v-if="meta" class="workspace-meta">{{ meta }}</span>
+      </div>
       <h1>{{ title }}</h1>
       <p class="hero-copy">{{ subtitle }}</p>
     </div>

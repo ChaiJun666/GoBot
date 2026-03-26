@@ -1,14 +1,20 @@
 export const enMessages = {
   console: {
-    title: "Run campaigns, score leads, and inspect execution.",
+    title: "Operate campaigns, inspect runs, and keep lead discovery in motion.",
     subtitle:
-      "Campaigns stay primary, jobs stay inspectable, and each source keeps its own search context.",
+      "A task-first workspace for launching source runs, monitoring health, and reviewing lead quality without losing context.",
   },
   nav: {
     overview: "Overview",
     campaigns: "Campaigns",
-    jobs: "Jobs",
-    system: "System",
+    jobs: "Diagnostics",
+    system: "Connections",
+  },
+  navHints: {
+    overview: "Command deck",
+    campaigns: "Pipeline workbench",
+    jobs: "Raw run telemetry",
+    system: "Sessions and runtime",
   },
   actions: {
     newCampaign: "New Campaign",
@@ -19,6 +25,7 @@ export const enMessages = {
     retry: "Retry failed run",
     retrying: "Retrying...",
     exportLeads: "Export leads",
+    openSystem: "Open connections",
   },
   messages: {
     campaignLaunchedPrefix: "Launched campaign",
@@ -37,6 +44,7 @@ export const enMessages = {
     noLinkedJobSelected: "No linked job selected.",
     notStarted: "Not started",
     pending: "Pending",
+    never: "Never",
     unlinked: "Unlinked",
     visit: "Visit",
     none: "None",
@@ -46,6 +54,8 @@ export const enMessages = {
     healthy: "Healthy",
     offline: "Offline",
     unavailable: "Unavailable",
+    connected: "Connected",
+    disconnected: "Disconnected",
   },
   status: {
     queued: "Queued",
@@ -62,8 +72,17 @@ export const enMessages = {
     searchCampaignsPlaceholder:
       "Search by campaign, source, industry, location, or search brief",
     statusLabel: "Status",
+    sourceLabel: "Source",
     allStatuses: "All statuses",
+    allSources: "All sources",
     filteredCount: "{visible} of {total} campaigns",
+  },
+  notices: {
+    offlineTitle: "LinkedIn source is not connected.",
+    offlineDetail:
+      "You can still run Google Maps campaigns. Connect LinkedIn when you need people sourcing.",
+    failureTitle: "Attention required",
+    loadingTitle: "Refreshing workspace",
   },
   leadTable: {
     searchLabel: "Search leads",
@@ -73,6 +92,7 @@ export const enMessages = {
     emptyDescription: "Adjust the search or wait for more results.",
     noCampaignDescription: "Select a campaign to review and export scored leads.",
     noJobDescription: "Select a job to review and export raw leads.",
+    matches: "{count} matches",
     columns: {
       lead: "Lead",
       priority: "Priority",
@@ -107,12 +127,46 @@ export const enMessages = {
     databasePath: "Database path",
     selectedCampaign: "Selected campaign",
     runtimeKicker: "Runtime",
+    quietRefresh: "Quiet refresh",
+    quietRefreshValue: "Every 5 seconds",
   },
   views: {
     overview: "Overview",
     campaigns: "Campaign workbench",
     jobs: "Operations center",
-    system: "System runtime",
+    system: "Connections and runtime",
+  },
+  headerMeta: {
+    overview: "{running} active campaigns",
+    campaigns: "{count} filtered campaigns",
+    jobs: "{count} recent jobs",
+    system: "{state} LinkedIn session",
+  },
+  overview: {
+    spotlight: {
+      kicker: "Operator view",
+      title: "Keep campaigns moving without losing source context.",
+      description:
+        "Launch new runs, monitor bottlenecks, and jump straight into the campaigns that need action.",
+      recentTitle: "Recent campaigns",
+      healthTitle: "Source readiness",
+      emptyRecent: "No campaign activity yet.",
+    },
+    metrics: {
+      totalCampaigns: "Total campaigns",
+      priorityLeads: "Priority leads",
+      averageScore: "Average score",
+      inFlight: "In flight",
+      leadVolume: "Lead volume",
+      failed: "Failed",
+      latestActivityEmpty: "No campaign activity yet",
+      latestActivityPrefix: "Latest update",
+      priorityLeadsDetail: "High-value prospects found",
+      averageScoreDetail: "Across completed campaigns",
+      inFlightDetail: "Queued or actively processing",
+      leadVolumeDetail: "All intelligence-scored leads",
+      failedDetail: "Campaigns needing review",
+    },
   },
   campaignCreate: {
     kicker: "Campaign creation",
@@ -144,7 +198,7 @@ export const enMessages = {
     linkedinReviewDescription:
       "LinkedIn returns people leads with headline, company, location, profile, and any captured email.",
     linkedinDisconnectedDescription:
-      "Connect a shared LinkedIn session in System runtime before launching a LinkedIn campaign.",
+      "Connect a shared LinkedIn session in Connections before launching a LinkedIn campaign.",
     industryOptions: {
       restaurant: "Restaurant",
       automotive: "Automotive",
@@ -160,6 +214,8 @@ export const enMessages = {
     sessionTitle: "LinkedIn connection",
     sessionDescription:
       "Manage one shared LinkedIn session for workspace scraping. Credentials are used only to establish the session.",
+    sessionState: "Session state",
+    updatedAt: "Last updated",
     connected: "Connected",
     disconnected: "Disconnected",
     connectedAs: "Connected account",
@@ -169,38 +225,6 @@ export const enMessages = {
     connecting: "Connecting...",
     disconnect: "Disconnect",
   },
-  legacy: {
-    campaignComposer: {
-      kicker: "Campaigns",
-    },
-    campaignResults: {
-      kicker: "Intelligence",
-      campaign: "Campaign",
-    },
-    jobComposer: {
-      kicker: "Launch",
-      title: "Launch a scrape job",
-      query: "Search query",
-      source: "Source",
-    },
-  },
-  overview: {
-    metrics: {
-      totalCampaigns: "Total campaigns",
-      priorityLeads: "Priority leads",
-      averageScore: "Average score",
-      inFlight: "In flight",
-      leadVolume: "Lead volume",
-      failed: "Failed",
-      latestActivityEmpty: "No campaign activity yet",
-      latestActivityPrefix: "Latest update",
-      priorityLeadsDetail: "High-value prospects found",
-      averageScoreDetail: "Across completed campaigns",
-      inFlightDetail: "Queued or actively processing",
-      leadVolumeDetail: "All intelligence-scored leads",
-      failedDetail: "Campaigns needing review",
-    },
-  },
   campaigns: {
     queueKicker: "Pipeline",
     queueTitle: "Campaign queue",
@@ -208,12 +232,18 @@ export const enMessages = {
     queueEmptyDescription:
       "Create a campaign to combine scrape execution and intelligence scoring.",
     queueFilteredEmptyTitle: "No campaigns match these filters.",
-    queueFilteredEmptyDescription: "Adjust the search or status filter to see more campaigns.",
+    queueFilteredEmptyDescription: "Adjust the search or filter to see more campaigns.",
     prioritySuffix: "priority",
     leadsSuffix: "leads",
     averageScoreSuffix: "avg score",
     workbenchTitle: "Campaign workbench",
     selectedKicker: "Selected campaign",
+    leadReviewKicker: "Lead review",
+    leadReviewTitle: "Campaign leads",
+    emptyWorkbenchDescription:
+      "Select a campaign to inspect its status, telemetry, and scored leads.",
+    telemetryTitle: "Execution telemetry",
+    telemetryEmptyDescription: "Select a campaign to inspect execution details.",
     detail: {
       source: "Source",
       priorityLeads: "Priority leads",
@@ -224,12 +254,6 @@ export const enMessages = {
       query: "Search brief",
       jobId: "Job id",
     },
-    leadReviewKicker: "Lead review",
-    leadReviewTitle: "Campaign leads",
-    emptyWorkbenchDescription:
-      "Select a campaign to inspect its status, telemetry, and scored leads.",
-    telemetryTitle: "Execution telemetry",
-    telemetryEmptyDescription: "Select a campaign to inspect execution details.",
   },
   jobs: {
     centerKicker: "Operations center",

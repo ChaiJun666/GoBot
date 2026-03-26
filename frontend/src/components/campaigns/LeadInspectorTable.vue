@@ -47,6 +47,7 @@ const filteredResults = computed(() => {
       .some((value) => String(value).toLowerCase().includes(needle)),
   );
 });
+const matchCountLabel = computed(() => t("leadTable.matches", { count: filteredResults.value.length }));
 
 function renderValue(value: string | null | undefined): string {
   return value?.trim() || t("common.unavailable");
@@ -58,19 +59,20 @@ function renderValue(value: string | null | undefined): string {
     <div class="panel-heading">
       <p class="panel-kicker">{{ t("campaigns.leadReviewKicker") }}</p>
       <h2>{{ t("campaigns.leadReviewTitle") }}</h2>
+      <p v-if="campaign" class="list-meta">{{ matchCountLabel }}</p>
     </div>
 
     <template v-if="campaign">
-      <label class="filter-field">
-        <span>{{ t("leadTable.searchLabel") }}</span>
-        <input
-          v-model="filterText"
-          type="search"
-          :placeholder="t('leadTable.searchCampaignPlaceholder')"
-        />
-      </label>
+      <div class="panel-toolbar table-toolbar">
+        <label class="filter-field table-filter">
+          <span>{{ t("leadTable.searchLabel") }}</span>
+          <input
+            v-model="filterText"
+            type="search"
+            :placeholder="t('leadTable.searchCampaignPlaceholder')"
+          />
+        </label>
 
-      <div class="panel-actions">
         <button class="ghost-button" type="button" @click="emit('export', filteredResults)">
           {{ t("actions.exportLeads") }}
         </button>

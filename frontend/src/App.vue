@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import CampaignCreationDrawer from "@/components/campaigns/CampaignCreationDrawer.vue";
 import CampaignWorkbench from "@/components/campaigns/CampaignWorkbench.vue";
 import CampaignList from "@/components/CampaignList.vue";
+import InlineStatusNotice from "@/components/InlineStatusNotice.vue";
 import JobList from "@/components/JobList.vue";
 import ConsoleShell from "@/components/layout/ConsoleShell.vue";
 import OperationsCenter from "@/components/jobs/OperationsCenter.vue";
@@ -28,6 +29,7 @@ import type {
   ScrapedLead,
   ScrapeJobResultsResponse,
   ScrapeJobSummary,
+  ScrapeSource,
 } from "@/types";
 
 const campaigns = ref<CampaignSummary[]>([]);
@@ -45,8 +47,10 @@ const creatingCampaign = ref(false);
 const syncingLinkedInSession = ref(false);
 const campaignDrawerOpen = ref(false);
 const message = ref<string | null>(null);
+const messageTone = ref<"info" | "success" | "warning" | "danger">("info");
 const campaignFilterQuery = ref("");
 const campaignFilterStatus = ref<CampaignStatus | "all">("all");
+const campaignFilterSource = ref<ScrapeSource | "all">("all");
 const retryingCampaignId = ref<string | null>(null);
 const retryingJobId = ref<string | null>(null);
 const workspace = createConsoleWorkspace({ initialView: "overview" });
@@ -76,28 +80,38 @@ const linkedJob = computed(
   () => jobs.value.find((job) => job.id === selectedCampaign.value?.job_id) ?? null,
 );
 
-const navItems = computed(() => [
-  { value: "overview" as ConsoleView, label: t("nav.overview") },
-  { value: "campaigns" as ConsoleView, label: t("nav.campaigns") },
-  { value: "jobs" as ConsoleView, label: t("nav.jobs") },
-  { value: "system" as ConsoleView, label: t("nav.system") },
-]);
-
 const localeOptions = [
-  { value: "zh-CN" as AppLocale, label: "简中" },
+  { value: "zh-CN" as AppLocale, label: "简体中文" },
   { value: "en" as AppLocale, label: "EN" },
 ];
+
+const navItems = computed(() => [
+  { value: "overview" as ConsoleView, label: t("nav.overview"), hint: t("navHints.overview") },
+  { value: "campaigns" as ConsoleView, label: t("nav.campaigns"), hint: t("navHints.campaigns") },
+  { value: "jobs" as ConsoleView, label: t("nav.jobs"), hint: t("navHints.jobs") },
+  { value: "system" as ConsoleView, label: t("nav.system"), hint: t("navHints.system") },
+]);
 
 const currentLocale = computed(() => locale.value as AppLocale);
 const headerTitle = computed(() => t(`views.${activeView.value}`));
 const headerSubtitle = computed(() => t("console.subtitle"));
+const statusCards = computed(() => [
+  { label: t("runtime.backend"), value: health.value?.status ?? t("common.unknown") },
+  {
+    label: t("runtime.database"),
+    value: health.value?.database.healthy ? t("common.healthy") : t("common.offline"),
+  },
+  { label: t("runtime.scraper"), value: health.value?.scraper.engine ?? t("common.unknown") },
+]);
 const filteredCampaigns = computed(() => {
   const needle = campaignFilterQuery.value.trim().toLowerCase();
 
   return campaigns.value.filter((campaign) => {
     const statusMatches =
       campaignFilterStatus.value === "all" || campaign.status === campaignFilterStatus.value;
-    if (!statusMatches) {
+    const sourceMatches =
+      campaignFilterSource.value === "all" || campaign.source === campaignFilterSource.value;
+    if (!statusMatches || !sourceMatches) {
       return false;
     }
 
@@ -110,15 +124,6 @@ const filteredCampaigns = computed(() => {
       .some((value) => String(value).toLowerCase().includes(needle));
   });
 });
-
-const statusCards = computed(() => [
-  { label: t("runtime.backend"), value: health.value?.status ?? t("common.unknown") },
-  {
-    label: t("runtime.database"),
-    value: health.value?.database.healthy ? t("common.healthy") : t("common.offline"),
-  },
-  { label: t("runtime.scraper"), value: health.value?.scraper.engine ?? t("common.unknown") },
-]);
 
 const totalLeadVolume = computed(() =>
   campaigns.value.reduce((sum, campaign) => sum + campaign.total_leads, 0),
@@ -149,18 +154,48 @@ const totalPriorityLeads = computed(() =>
   campaigns.value.reduce((sum, campaign) => sum + campaign.priority_leads, 0),
 );
 
+const recentCampaigns = computed(() => campaigns.value.slice(0, 4));
+const latestFailure = computed(
+  () => campaigns.value.find((campaign) => campaign.status === "failed" || campaign.error_message) ?? null,
+);
+const sourceReadiness = computed(() => [
+  { source: "google_maps" as ScrapeSource, state: t("common.enabled"), connected: true },
+  {
+    source: "linkedin" as ScrapeSource,
+    state: linkedinSession.value?.connected ? t("common.connected") : t("common.disconnected"),
+    connected: Boolean(linkedinSession.value?.connected),
+  },
+]);
+const headerMeta = computed(() => {
+  if (activeView.value === "campaigns") {
+    return t("headerMeta.campaigns", { count: filteredCampaigns.value.length });
+  }
+  if (activeView.value === "jobs") {
+    return t("headerMeta.jobs", { count: jobs.value.length });
+  }
+  if (activeView.value === "system") {
+    return t("headerMeta.system", {
+      state: linkedinSession.value?.connected ? t("common.connected") : t("common.disconnected"),
+    });
+  }
+  return t("headerMeta.overview", { running: runningCampaigns.value });
+});
+
 const activityLabel = computed(() => {
   const latest = campaigns.value[0];
   if (!latest) {
     return t("overview.metrics.latestActivityEmpty");
   }
 
-  return `${t("overview.metrics.latestActivityPrefix")} ${new Intl.DateTimeFormat("en-GB", {
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(latest.updated_at))}`;
+  return `${t("overview.metrics.latestActivityPrefix")} ${new Intl.DateTimeFormat(
+    currentLocale.value === "zh-CN" ? "zh-CN" : "en-GB",
+    {
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+  ).format(new Date(latest.updated_at))}`;
 });
 
 async function refreshHealth() {
@@ -314,6 +349,7 @@ async function createCampaign(payload: CreateCampaignRequest) {
   try {
     const response = await api.createCampaign(payload);
     message.value = `${t("messages.campaignLaunchedPrefix")} "${response.campaign.name}"`;
+    messageTone.value = "success";
     campaignDrawerOpen.value = false;
     await Promise.all([refreshCampaigns(), refreshJobs()]);
     await selectCampaign(response.campaign.id);
@@ -329,6 +365,7 @@ async function connectLinkedInSession(payload: ConnectLinkedInSessionRequest) {
   try {
     linkedinSession.value = await api.connectLinkedInSession(payload);
     message.value = t("messages.linkedinConnected");
+    messageTone.value = "success";
   } catch (error) {
     setMessage(error);
   } finally {
@@ -341,6 +378,7 @@ async function disconnectLinkedInSession() {
   try {
     linkedinSession.value = await api.disconnectLinkedInSession();
     message.value = t("messages.linkedinDisconnected");
+    messageTone.value = "warning";
   } catch (error) {
     setMessage(error);
   } finally {
@@ -350,6 +388,7 @@ async function disconnectLinkedInSession() {
 
 function setMessage(error: unknown) {
   message.value = error instanceof Error ? error.message : t("messages.unexpectedError");
+  messageTone.value = "danger";
 }
 
 function setActiveView(view: ConsoleView) {
@@ -366,6 +405,10 @@ function openCampaignView() {
   campaignDrawerOpen.value = true;
 }
 
+function openSystemView() {
+  activeView.value = "system";
+}
+
 function buildExportFilename(prefix: "campaign" | "job", label: string) {
   const safeLabel = label
     .trim()
@@ -378,6 +421,7 @@ function buildExportFilename(prefix: "campaign" | "job", label: string) {
 function exportCampaignLeads(leads: EnrichedLead[]) {
   if (!selectedCampaignDetail.value || !leads.length) {
     message.value = t("messages.exportUnavailable");
+    messageTone.value = "warning";
     return;
   }
 
@@ -387,6 +431,7 @@ function exportCampaignLeads(leads: EnrichedLead[]) {
 function exportJobLeads(leads: ScrapedLead[]) {
   if (!selectedJobResults.value || !leads.length) {
     message.value = t("messages.exportUnavailable");
+    messageTone.value = "warning";
     return;
   }
 
@@ -398,6 +443,7 @@ async function retryCampaign(campaignId: string) {
   try {
     const retried = await api.retryCampaign(campaignId);
     message.value = `${t("messages.campaignRetryQueued")} "${retried.name}"`;
+    messageTone.value = "info";
     await Promise.all([
       refreshCampaignWorkspace({ mode: "silent" }),
       refreshJobsWorkspace({ mode: "silent" }),
@@ -417,6 +463,7 @@ async function retryJob(jobId: string) {
   try {
     const retried = await api.retryJob(jobId);
     message.value = `${t("messages.jobRetryQueued")} ${retried.id.slice(0, 8)}`;
+    messageTone.value = "info";
     await Promise.all([
       refreshCampaignWorkspace({ mode: "silent" }),
       refreshJobsWorkspace({ mode: "silent" }),
@@ -477,6 +524,7 @@ onUnmounted(() => {
       :nav-items="navItems"
       :title="headerTitle"
       :subtitle="headerSubtitle"
+      :meta="headerMeta"
       :active-locale="currentLocale"
       :locale-options="localeOptions"
       :action-label="t('actions.newCampaign')"
@@ -492,13 +540,47 @@ onUnmounted(() => {
         @submit="createCampaign"
       />
 
-      <p v-if="message" class="inline-message global-message">{{ message }}</p>
+      <InlineStatusNotice
+        v-if="message"
+        class="global-message"
+        :title="message"
+        :tone="messageTone"
+      />
 
-      <section v-if="activeView === 'overview'" class="view-grid">
-        <section class="hero-status">
-          <div v-for="card in statusCards" :key="card.label" class="hero-status-card">
-            <span class="summary-label">{{ card.label }}</span>
-            <strong>{{ card.value }}</strong>
+      <section v-if="activeView === 'overview'" class="view-grid overview-shell">
+        <section class="panel spotlight-panel">
+          <div class="spotlight-copy">
+            <p class="panel-kicker">{{ t("overview.spotlight.kicker") }}</p>
+            <h2>{{ t("overview.spotlight.title") }}</h2>
+            <p class="drawer-copy">{{ t("overview.spotlight.description") }}</p>
+            <div class="panel-actions spotlight-actions">
+              <button class="action-button" type="button" @click="openCampaignView">
+                {{ t("actions.newCampaign") }}
+              </button>
+              <button class="ghost-button" type="button" @click="openSystemView">
+                {{ t("actions.openSystem") }}
+              </button>
+            </div>
+          </div>
+
+          <div class="spotlight-side">
+            <div class="hero-status">
+              <div v-for="card in statusCards" :key="card.label" class="hero-status-card">
+                <span class="summary-label">{{ card.label }}</span>
+                <strong>{{ card.value }}</strong>
+              </div>
+            </div>
+            <div class="source-readiness-list">
+              <article
+                v-for="item in sourceReadiness"
+                :key="item.source"
+                class="source-readiness-card"
+                :data-connected="item.connected"
+              >
+                <span class="summary-label">{{ t(`sources.${item.source}`) }}</span>
+                <strong>{{ item.state }}</strong>
+              </article>
+            </div>
           </div>
         </section>
 
@@ -531,45 +613,87 @@ onUnmounted(() => {
           />
         </section>
 
-        <section class="panel panel-health">
-          <div class="panel-heading">
-            <p class="panel-kicker">{{ t("runtime.runtimeKicker") }}</p>
-            <h2>{{ t("runtime.serviceHealth") }}</h2>
-          </div>
+        <section class="overview-rail">
+          <section class="panel rail-panel">
+            <div class="panel-heading">
+              <p class="panel-kicker">{{ t("overview.spotlight.recentTitle") }}</p>
+              <h2>{{ t("campaigns.queueTitle") }}</h2>
+            </div>
+            <div v-if="recentCampaigns.length" class="compact-stack">
+              <button
+                v-for="campaign in recentCampaigns"
+                :key="campaign.id"
+                class="compact-item"
+                type="button"
+                @click="selectCampaign(campaign.id)"
+              >
+                <div class="compact-item-top">
+                  <strong>{{ campaign.name }}</strong>
+                  <StatusBadge :status="campaign.status" />
+                </div>
+                <p class="job-meta">{{ t(`sources.${campaign.source}`) }} / {{ campaign.location }}</p>
+              </button>
+            </div>
+            <div v-else class="empty-state compact-empty">
+              <p>{{ t("overview.spotlight.emptyRecent") }}</p>
+            </div>
+          </section>
 
-          <dl class="health-grid">
-            <div>
-              <dt>{{ t("runtime.databasePath") }}</dt>
-              <dd>{{ health?.database.path ?? t("common.unknown") }}</dd>
+          <section class="panel rail-panel">
+            <div class="panel-heading">
+              <p class="panel-kicker">{{ t("overview.spotlight.healthTitle") }}</p>
+              <h2>{{ t("runtime.serviceHealth") }}</h2>
             </div>
-            <div>
-              <dt>{{ t("runtime.timeout") }}</dt>
-              <dd>{{ health?.scraper.timeout_ms ?? 0 }} ms</dd>
-            </div>
-            <div>
-              <dt>{{ t("runtime.tlsVerify") }}</dt>
-              <dd>{{ health?.scraper.verify_tls ? t("common.enabled") : t("common.disabled") }}</dd>
-            </div>
-            <div>
-              <dt>{{ t("runtime.polling") }}</dt>
-              <dd>5 seconds</dd>
-            </div>
-          </dl>
+            <dl class="health-grid compact-health-grid">
+              <div>
+                <dt>{{ t("runtime.databasePath") }}</dt>
+                <dd>{{ health?.database.path ?? t("common.unknown") }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("runtime.timeout") }}</dt>
+                <dd>{{ health?.scraper.timeout_ms ?? 0 }} ms</dd>
+              </div>
+              <div>
+                <dt>{{ t("runtime.tlsVerify") }}</dt>
+                <dd>{{ health?.scraper.verify_tls ? t("common.enabled") : t("common.disabled") }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("runtime.quietRefresh") }}</dt>
+                <dd>{{ t("runtime.quietRefreshValue") }}</dd>
+              </div>
+            </dl>
+
+            <InlineStatusNotice
+              v-if="latestFailure"
+              :title="t('notices.failureTitle')"
+              :detail="latestFailure.error_message ?? latestFailure.name"
+              tone="warning"
+            />
+          </section>
         </section>
       </section>
 
-      <section v-else-if="activeView === 'campaigns'" class="view-grid">
+      <section v-else-if="activeView === 'campaigns'" class="view-grid campaign-layout">
+        <InlineStatusNotice
+          v-if="!linkedinSession?.connected"
+          :title="t('notices.offlineTitle')"
+          :detail="t('notices.offlineDetail')"
+          tone="info"
+        />
+
         <CampaignList
           :campaigns="filteredCampaigns"
           :selected-campaign-id="selectedCampaignId"
           :loading="loadingCampaigns"
           :filter-query="campaignFilterQuery"
           :filter-status="campaignFilterStatus"
+          :filter-source="campaignFilterSource"
           :total-campaigns="campaigns.length"
           @select="selectCampaign"
           @refresh="refreshCampaignWorkspace()"
           @update-filter-query="campaignFilterQuery = $event"
           @update-filter-status="campaignFilterStatus = $event"
+          @update-filter-source="campaignFilterSource = $event"
         />
 
         <CampaignWorkbench
@@ -582,7 +706,7 @@ onUnmounted(() => {
         />
       </section>
 
-      <section v-else-if="activeView === 'jobs'" class="view-grid">
+      <section v-else-if="activeView === 'jobs'" class="view-grid jobs-layout">
         <OperationsCenter>
           <JobList
             :jobs="jobs"
@@ -646,39 +770,48 @@ onUnmounted(() => {
         </OperationsCenter>
       </section>
 
-      <section v-else class="view-grid">
-        <section class="panel panel-health">
-          <div class="panel-heading">
-            <p class="panel-kicker">{{ t("runtime.runtimeKicker") }}</p>
-            <h2>{{ t("runtime.systemDetails") }}</h2>
-          </div>
-
-          <dl class="health-grid">
-            <div>
-              <dt>{{ t("runtime.databasePath") }}</dt>
-              <dd>{{ health?.database.path ?? t("common.unknown") }}</dd>
-            </div>
-            <div>
-              <dt>{{ t("runtime.timeout") }}</dt>
-              <dd>{{ health?.scraper.timeout_ms ?? 0 }} ms</dd>
-            </div>
-            <div>
-              <dt>{{ t("runtime.tlsVerify") }}</dt>
-              <dd>{{ health?.scraper.verify_tls ? t("common.enabled") : t("common.disabled") }}</dd>
-            </div>
-            <div>
-              <dt>{{ t("runtime.selectedCampaign") }}</dt>
-              <dd>{{ selectedCampaign?.id?.slice(0, 8) ?? t("common.none") }}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <LinkedInSessionCard
-          :session="linkedinSession"
-          :busy="loadingLinkedInSession || syncingLinkedInSession"
-          @connect="connectLinkedInSession"
-          @disconnect="disconnectLinkedInSession"
+      <section v-else class="view-grid system-layout">
+        <InlineStatusNotice
+          v-if="linkedinSession?.last_error"
+          :title="t('notices.failureTitle')"
+          :detail="linkedinSession.last_error"
+          tone="warning"
         />
+
+        <section class="system-grid">
+          <section class="panel panel-health">
+            <div class="panel-heading">
+              <p class="panel-kicker">{{ t("runtime.runtimeKicker") }}</p>
+              <h2>{{ t("runtime.systemDetails") }}</h2>
+            </div>
+
+            <dl class="health-grid">
+              <div>
+                <dt>{{ t("runtime.databasePath") }}</dt>
+                <dd>{{ health?.database.path ?? t("common.unknown") }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("runtime.timeout") }}</dt>
+                <dd>{{ health?.scraper.timeout_ms ?? 0 }} ms</dd>
+              </div>
+              <div>
+                <dt>{{ t("runtime.tlsVerify") }}</dt>
+                <dd>{{ health?.scraper.verify_tls ? t("common.enabled") : t("common.disabled") }}</dd>
+              </div>
+              <div>
+                <dt>{{ t("runtime.selectedCampaign") }}</dt>
+                <dd>{{ selectedCampaign?.id?.slice(0, 8) ?? t("common.none") }}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <LinkedInSessionCard
+            :session="linkedinSession"
+            :busy="loadingLinkedInSession || syncingLinkedInSession"
+            @connect="connectLinkedInSession"
+            @disconnect="disconnectLinkedInSession"
+          />
+        </section>
       </section>
     </ConsoleShell>
   </div>

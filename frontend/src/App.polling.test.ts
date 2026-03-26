@@ -184,18 +184,18 @@ describe("App polling behavior", () => {
     await navButtons[3].trigger("click");
     await flushPromises();
 
-    expect(wrapper.get(".primary-nav-button.active").text()).toBe("System");
+    expect(wrapper.get(".primary-nav-button.active .primary-nav-label").text()).toBe("Connections");
 
     await navButtons[1].trigger("click");
     await flushPromises();
 
-    expect(wrapper.get(".primary-nav-button.active").text()).toBe("Campaigns");
+    expect(wrapper.get(".primary-nav-button.active .primary-nav-label").text()).toBe("Campaigns");
     expect(wrapper.text()).not.toContain("Refresh...");
 
     await vi.advanceTimersByTimeAsync(5000);
     await flushPromises();
 
-    expect(wrapper.get(".primary-nav-button.active").text()).toBe("Campaigns");
+    expect(wrapper.get(".primary-nav-button.active .primary-nav-label").text()).toBe("Campaigns");
     expect(wrapper.text()).not.toContain("Refresh...");
 
     wrapper.unmount();
@@ -212,7 +212,7 @@ describe("App polling behavior", () => {
     await cards[1].trigger("click");
     await flushPromises();
 
-    expect(wrapper.get(".primary-nav-button.active").text()).toBe("Campaigns");
+    expect(wrapper.get(".primary-nav-button.active .primary-nav-label").text()).toBe("Campaigns");
     expect(wrapper.find(".campaign-workbench").exists()).toBe(true);
     expect(wrapper.find(".operations-center").exists()).toBe(false);
     expect(apiMocks.getCampaign).toHaveBeenLastCalledWith("campaign-2");

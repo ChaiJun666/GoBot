@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
+import InlineStatusNotice from "@/components/InlineStatusNotice.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import { describeSourceQuery } from "@/lib/sources";
 import type { ScrapeJobResultsResponse, ScrapedLead } from "@/types";
@@ -49,12 +50,13 @@ const filteredResults = computed(() => {
       .some((value) => String(value).toLowerCase().includes(needle)),
   );
 });
+const matchCountLabel = computed(() => t("leadTable.matches", { count: filteredResults.value.length }));
 
 function formatDate(value: string | null): string {
   if (!value) {
     return "-";
   }
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "2-digit",
     hour: "2-digit",
@@ -81,6 +83,7 @@ function getQueryLabel(): string {
       <div class="panel-heading">
         <p class="panel-kicker">{{ t("jobs.resultsKicker") }}</p>
         <h2>{{ t("jobs.resultsTitle") }}</h2>
+        <p v-if="payload" class="list-meta">{{ matchCountLabel }}</p>
       </div>
       <div class="panel-actions">
         <button
@@ -105,6 +108,13 @@ function getQueryLabel(): string {
     </div>
 
     <template v-if="payload">
+      <InlineStatusNotice
+        v-if="payload.job.error_message"
+        :title="t('notices.failureTitle')"
+        :detail="payload.job.error_message"
+        tone="warning"
+      />
+
       <div class="results-summary">
         <div>
           <span class="summary-label">{{ t("jobs.query") }}</span>
@@ -124,10 +134,12 @@ function getQueryLabel(): string {
         </div>
       </div>
 
-      <label class="filter-field">
-        <span>{{ t("leadTable.searchLabel") }}</span>
-        <input v-model="filterText" type="search" :placeholder="t('leadTable.searchJobPlaceholder')" />
-      </label>
+      <div class="panel-toolbar table-toolbar">
+        <label class="filter-field table-filter">
+          <span>{{ t("leadTable.searchLabel") }}</span>
+          <input v-model="filterText" type="search" :placeholder="t('leadTable.searchJobPlaceholder')" />
+        </label>
+      </div>
 
       <div v-if="filteredResults.length" class="table-shell">
         <table>

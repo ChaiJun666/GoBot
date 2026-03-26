@@ -8,6 +8,7 @@ import WorkspaceHeader from "@/components/layout/WorkspaceHeader.vue";
 interface NavItem {
   value: ConsoleView;
   label: string;
+  hint?: string;
 }
 
 interface LocaleOption {
@@ -20,6 +21,7 @@ defineProps<{
   navItems: NavItem[];
   title: string;
   subtitle: string;
+  meta?: string;
   activeLocale: AppLocale;
   localeOptions: LocaleOption[];
   actionLabel: string;
@@ -46,6 +48,7 @@ defineEmits<{
       <WorkspaceHeader
         :title="title"
         :subtitle="subtitle"
+        :meta="meta"
         :active-locale="activeLocale"
         :locale-options="localeOptions"
         :action-label="actionLabel"
