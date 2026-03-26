@@ -216,6 +216,8 @@ export const zhCnMessages = {
     connectedAs: "当前账号",
     username: "用户名",
     password: "密码",
+    showPassword: "显示密码",
+    hidePassword: "隐藏密码",
     connect: "连接会话",
     connecting: "连接中...",
     disconnect: "断开连接",

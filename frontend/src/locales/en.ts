@@ -221,6 +221,8 @@ export const enMessages = {
     connectedAs: "Connected account",
     username: "Username",
     password: "Password",
+    showPassword: "Show password",
+    hidePassword: "Hide password",
     connect: "Connect session",
     connecting: "Connecting...",
     disconnect: "Disconnect",

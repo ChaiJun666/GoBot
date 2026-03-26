@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive } from "vue";
+import { computed, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import InlineStatusNotice from "@/components/InlineStatusNotice.vue";
@@ -20,9 +20,14 @@ const form = reactive({
   username: "",
   password: "",
 });
+const showPassword = ref(false);
 
 const canSubmit = computed(
   () => Boolean(form.username.trim() && form.password.trim()) && !props.busy,
+);
+const passwordInputType = computed(() => (showPassword.value ? "text" : "password"));
+const passwordToggleLabel = computed(() =>
+  showPassword.value ? t("linkedin.hidePassword") : t("linkedin.showPassword"),
 );
 
 const sessionStateLabel = computed(() =>
@@ -51,6 +56,11 @@ function handleSubmit() {
     password: form.password,
   });
   form.password = "";
+  showPassword.value = false;
+}
+
+function togglePasswordVisibility() {
+  showPassword.value = !showPassword.value;
 }
 </script>
 
@@ -88,7 +98,7 @@ function handleSubmit() {
       tone="warning"
     />
 
-    <form class="composer-form" @submit.prevent="handleSubmit">
+    <form v-if="!session?.connected" class="composer-form" @submit.prevent="handleSubmit">
       <label>
         <span>{{ t("linkedin.username") }}</span>
         <input v-model="form.username" type="text" autocomplete="username" />
@@ -96,23 +106,101 @@ function handleSubmit() {
 
       <label>
         <span>{{ t("linkedin.password") }}</span>
-        <input v-model="form.password" type="password" autocomplete="current-password" />
+        <div class="password-field">
+          <input
+            v-model="form.password"
+            :type="passwordInputType"
+            autocomplete="current-password"
+          />
+          <button
+            class="password-toggle"
+            type="button"
+            :aria-label="passwordToggleLabel"
+            :title="passwordToggleLabel"
+            @click="togglePasswordVisibility"
+          >
+            <svg
+              v-if="showPassword"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M3 4.5 19.5 21"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.8"
+              />
+              <path
+                d="M10.7 6.2A10.9 10.9 0 0 1 12 6c5.4 0 9.2 4.3 10 6-.4.8-1.5 2.5-3.3 4"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.8"
+              />
+              <path
+                d="M14.1 14.1A3 3 0 0 1 9.9 9.9"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.8"
+              />
+              <path
+                d="M6.2 7.4C3.7 9 2.3 11.3 2 12c.8 1.7 4.6 6 10 6 1.3 0 2.5-.2 3.5-.6"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.8"
+              />
+            </svg>
+            <svg
+              v-else
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M2 12c.8-1.7 4.6-6 10-6s9.2 4.3 10 6c-.8 1.7-4.6 6-10 6S2.8 13.7 2 12Z"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.8"
+              />
+              <circle
+                cx="12"
+                cy="12"
+                r="3"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              />
+            </svg>
+          </button>
+        </div>
       </label>
 
       <div class="panel-actions">
         <button class="action-button" type="submit" :disabled="!canSubmit">
           {{ busy ? t("linkedin.connecting") : t("linkedin.connect") }}
         </button>
-        <button
-          v-if="session?.connected"
-          class="ghost-button"
-          type="button"
-          :disabled="busy"
-          @click="$emit('disconnect')"
-        >
-          {{ t("linkedin.disconnect") }}
-        </button>
       </div>
     </form>
+
+    <div v-else class="panel-actions">
+      <button
+        class="ghost-button"
+        type="button"
+        :disabled="busy"
+        @click="$emit('disconnect')"
+      >
+        {{ t("linkedin.disconnect") }}
+      </button>
+    </div>
   </section>
 </template>
