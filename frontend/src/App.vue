@@ -872,10 +872,6 @@ onUnmounted(() => {
             </div>
             <dl class="health-grid compact-health-grid">
               <div>
-                <dt>{{ t("runtime.databasePath") }}</dt>
-                <dd>{{ health?.database.path ?? t("common.unknown") }}</dd>
-              </div>
-              <div>
                 <dt>{{ t("runtime.timeout") }}</dt>
                 <dd>{{ health?.scraper.timeout_ms ?? 0 }} ms</dd>
               </div>
@@ -1040,20 +1036,12 @@ onUnmounted(() => {
 
             <dl class="health-grid">
               <div>
-                <dt>{{ t("runtime.databasePath") }}</dt>
-                <dd>{{ health?.database.path ?? t("common.unknown") }}</dd>
-              </div>
-              <div>
                 <dt>{{ t("runtime.timeout") }}</dt>
                 <dd>{{ health?.scraper.timeout_ms ?? 0 }} ms</dd>
               </div>
               <div>
                 <dt>{{ t("runtime.tlsVerify") }}</dt>
                 <dd>{{ health?.scraper.verify_tls ? t("common.enabled") : t("common.disabled") }}</dd>
-              </div>
-              <div>
-                <dt>{{ t("runtime.selectedCampaign") }}</dt>
-                <dd>{{ selectedCampaign?.id?.slice(0, 8) ?? t("common.none") }}</dd>
               </div>
             </dl>
           </section>

@@ -109,7 +109,7 @@ a {
   top: 32px;
   display: grid;
   gap: 18px;
-  padding: 20px;
+  padding: 20px 20px 20px 14px;
   border-radius: var(--radius-xl);
 }
 
@@ -220,7 +220,7 @@ a {
   border: 1px solid transparent;
   border-radius: 18px;
   background: rgba(255, 247, 232, 0.72);
-  padding: 14px 16px;
+  padding: 14px 14px;
   text-align: left;
   color: var(--ink);
   transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
@@ -469,6 +469,25 @@ a {
 .campaign-layout {
   grid-template-columns: minmax(320px, 0.88fr) minmax(0, 1.12fr);
   align-items: start;
+}
+
+.view-grid > *,
+.campaign-layout > *,
+.campaign-workbench > *,
+.operations-center > *,
+.system-grid > *,
+.mail-workspace > * {
+  min-width: 0;
+}
+
+.campaign-workbench,
+.panel-detail,
+.panel-results {
+  min-width: 0;
+}
+
+.table-shell {
+  width: 100%;
 }
 
 .campaign-layout > .inline-notice {
