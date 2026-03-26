@@ -10,21 +10,9 @@ from app.core.database import Database
 from app.services.scraping.linkedin_session import LinkedInSessionService
 
 
-class _CssResult:
-    def __init__(self, value: str | None) -> None:
-        self.value = value
-
-    def get(self) -> str | None:
-        return self.value
-
-
 class _DummyResponse:
-    def __init__(self, *, csrf: str | None = None, cookies: dict[str, str] | None = None) -> None:
-        self._csrf = csrf
-        self.cookies = cookies or {}
-
-    def css(self, _selector: str) -> _CssResult:
-        return _CssResult(self._csrf)
+    def __init__(self, url: str = "https://www.linkedin.com/feed/") -> None:
+        self.url = url
 
 
 def _build_service(tmp_path: Path) -> LinkedInSessionService:
@@ -36,22 +24,15 @@ def _build_service(tmp_path: Path) -> LinkedInSessionService:
 def test_linkedin_session_connects_and_persists_shared_cookies(tmp_path: Path) -> None:
     service = _build_service(tmp_path)
 
-    async def fake_fetch(
-        method: str,
-        url: str,
-        *,
-        cookies: dict[str, str] | None = None,
-        data: dict[str, str] | None = None,
-    ) -> _DummyResponse:
-        if "login-submit" in url:
-            assert cookies == {"JSESSIONID": "seed-cookie"}
-            assert data is not None
-            assert data["session_key"] == "user@example.com"
-            return _DummyResponse(cookies={"li_at": "linkedin-cookie", "JSESSIONID": "fresh-cookie"})
+    async def fake_login(*, username: str, password: str) -> tuple[dict[str, str], _DummyResponse]:
+        assert username == "user@example.com"
+        assert password == "secret"
+        return (
+            {"li_at": "linkedin-cookie", "JSESSIONID": "fresh-cookie"},
+            _DummyResponse(),
+        )
 
-        return _DummyResponse(csrf="csrf-token", cookies={"JSESSIONID": "seed-cookie"})
-
-    service._fetch = fake_fetch  # type: ignore[method-assign]
+    service._login = fake_login  # type: ignore[method-assign]
 
     status = asyncio.run(service.connect(username="user@example.com", password="secret"))
 
@@ -63,21 +44,17 @@ def test_linkedin_session_connects_and_persists_shared_cookies(tmp_path: Path) -
 def test_linkedin_session_persists_last_error_on_failed_connect(tmp_path: Path) -> None:
     service = _build_service(tmp_path)
 
-    async def fake_fetch(
-        _method: str,
-        url: str,
-        *,
-        cookies: dict[str, str] | None = None,
-        data: dict[str, str] | None = None,
-    ) -> _DummyResponse:
-        if "login-submit" in url:
-            return _DummyResponse(cookies={"JSESSIONID": "fresh-cookie"})
+    async def fake_login(*, username: str, password: str) -> tuple[dict[str, str], _DummyResponse]:
+        assert username == "user@example.com"
+        assert password == "secret"
+        return (
+            {"JSESSIONID": "fresh-cookie"},
+            _DummyResponse("https://www.linkedin.com/feed/"),
+        )
 
-        return _DummyResponse(csrf="csrf-token", cookies={"JSESSIONID": "seed-cookie"})
+    service._login = fake_login  # type: ignore[method-assign]
 
-    service._fetch = fake_fetch  # type: ignore[method-assign]
-
-    with pytest.raises(RuntimeError, match="session cookie"):
+    with pytest.raises(RuntimeError, match="no li_at cookie"):
         asyncio.run(service.connect(username="user@example.com", password="secret"))
 
     status = asyncio.run(service.get_status())
