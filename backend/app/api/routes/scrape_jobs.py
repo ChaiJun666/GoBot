@@ -57,6 +57,29 @@ async def get_scrape_job(job_id: str, request: Request) -> ScrapeJobSummary:
     return ScrapeJobSummary.from_record(job)
 
 
+@router.post("/{job_id}/retry", response_model=ScrapeJobSummary, status_code=status.HTTP_202_ACCEPTED)
+async def retry_scrape_job(job_id: str, request: Request) -> ScrapeJobSummary:
+    database = get_database(request)
+    job_manager = get_job_manager(request)
+    job = database.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    if job["status"] != "failed":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only failed jobs can be retried")
+
+    database.retry_job(job_id)
+    campaign = database.get_campaign_by_job_id(job_id)
+    if campaign is not None:
+        database.retry_campaign(campaign["id"])
+
+    await job_manager.enqueue(job_id)
+
+    refreshed = database.get_job(job_id)
+    if refreshed is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retry job")
+    return ScrapeJobSummary.from_record(refreshed)
+
+
 @router.get("/{job_id}/results", response_model=ScrapeJobResultsResponse)
 async def get_scrape_job_results(job_id: str, request: Request) -> ScrapeJobResultsResponse:
     database = get_database(request)

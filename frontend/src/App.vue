@@ -14,11 +14,15 @@ import StatusBadge from "@/components/StatusBadge.vue";
 import { createConsoleWorkspace, type ConsoleView } from "@/composables/useConsoleWorkspace";
 import { api } from "@/lib/api";
 import { persistLocale, type AppLocale } from "@/lib/i18n";
+import { downloadLeadsCsv } from "@/lib/leadExports";
 import type {
+  CampaignStatus,
   CampaignDetail,
   CampaignSummary,
   CreateCampaignRequest,
+  EnrichedLead,
   HealthResponse,
+  ScrapedLead,
   ScrapeJobResultsResponse,
   ScrapeJobSummary,
 } from "@/types";
@@ -35,6 +39,10 @@ const loadingJobResults = ref(false);
 const creatingCampaign = ref(false);
 const campaignDrawerOpen = ref(false);
 const message = ref<string | null>(null);
+const campaignFilterQuery = ref("");
+const campaignFilterStatus = ref<CampaignStatus | "all">("all");
+const retryingCampaignId = ref<string | null>(null);
+const retryingJobId = ref<string | null>(null);
 const workspace = createConsoleWorkspace({ initialView: "overview" });
 const selectedCampaignId = workspace.selectedCampaignId;
 const selectedJobId = workspace.selectedJobId;
@@ -52,6 +60,10 @@ const selectedCampaign = computed(
     campaigns.value.find((campaign) => campaign.id === selectedCampaignId.value) ??
     selectedCampaignDetail.value ??
     null,
+);
+
+const selectedJob = computed(
+  () => jobs.value.find((job) => job.id === selectedJobId.value) ?? selectedJobResults.value?.job ?? null,
 );
 
 const linkedJob = computed(
@@ -73,6 +85,25 @@ const localeOptions = [
 const currentLocale = computed(() => locale.value as AppLocale);
 const headerTitle = computed(() => t(`views.${activeView.value}`));
 const headerSubtitle = computed(() => t("console.subtitle"));
+const filteredCampaigns = computed(() => {
+  const needle = campaignFilterQuery.value.trim().toLowerCase();
+
+  return campaigns.value.filter((campaign) => {
+    const statusMatches =
+      campaignFilterStatus.value === "all" || campaign.status === campaignFilterStatus.value;
+    if (!statusMatches) {
+      return false;
+    }
+
+    if (!needle) {
+      return true;
+    }
+
+    return [campaign.name, campaign.industry, campaign.location, campaign.query]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(needle));
+  });
+});
 
 const statusCards = computed(() => [
   { label: t("runtime.backend"), value: health.value?.status ?? t("common.unknown") },
@@ -288,6 +319,71 @@ function openCampaignView() {
   campaignDrawerOpen.value = true;
 }
 
+function buildExportFilename(prefix: "campaign" | "job", label: string) {
+  const safeLabel = label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "leads";
+  return `${prefix}-${safeLabel}.csv`;
+}
+
+function exportCampaignLeads(leads: EnrichedLead[]) {
+  if (!selectedCampaignDetail.value || !leads.length) {
+    message.value = t("messages.exportUnavailable");
+    return;
+  }
+
+  downloadLeadsCsv(buildExportFilename("campaign", selectedCampaignDetail.value.name), leads);
+}
+
+function exportJobLeads(leads: ScrapedLead[]) {
+  if (!selectedJobResults.value || !leads.length) {
+    message.value = t("messages.exportUnavailable");
+    return;
+  }
+
+  downloadLeadsCsv(buildExportFilename("job", selectedJobResults.value.job.query), leads);
+}
+
+async function retryCampaign(campaignId: string) {
+  retryingCampaignId.value = campaignId;
+  try {
+    const retried = await api.retryCampaign(campaignId);
+    message.value = `${t("messages.campaignRetryQueued")} "${retried.name}"`;
+    await Promise.all([
+      refreshCampaignWorkspace({ mode: "silent" }),
+      refreshJobsWorkspace({ mode: "silent" }),
+    ]);
+    if (selectedCampaignId.value === campaignId) {
+      await refreshSelectedCampaign({ mode: "silent" });
+    }
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    retryingCampaignId.value = null;
+  }
+}
+
+async function retryJob(jobId: string) {
+  retryingJobId.value = jobId;
+  try {
+    const retried = await api.retryJob(jobId);
+    message.value = `${t("messages.jobRetryQueued")} ${retried.id.slice(0, 8)}`;
+    await Promise.all([
+      refreshCampaignWorkspace({ mode: "silent" }),
+      refreshJobsWorkspace({ mode: "silent" }),
+    ]);
+    if (selectedJobId.value === jobId) {
+      await loadJobResults(jobId, { mode: "silent" });
+    }
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    retryingJobId.value = null;
+  }
+}
+
 async function bootstrap() {
   await Promise.all([refreshHealth(), refreshCampaigns(), refreshJobs()]);
   if (selectedCampaignId.value) {
@@ -346,6 +442,8 @@ onUnmounted(() => {
         @close="campaignDrawerOpen = false"
         @submit="createCampaign"
       />
+
+      <p v-if="message" class="inline-message global-message">{{ message }}</p>
 
       <section v-if="activeView === 'overview'" class="view-grid">
         <section class="hero-status">
@@ -408,24 +506,30 @@ onUnmounted(() => {
               <dd>5 seconds</dd>
             </div>
           </dl>
-
-          <p v-if="message" class="inline-message">{{ message }}</p>
         </section>
       </section>
 
       <section v-else-if="activeView === 'campaigns'" class="view-grid">
         <CampaignList
-          :campaigns="campaigns"
+          :campaigns="filteredCampaigns"
           :selected-campaign-id="selectedCampaignId"
           :loading="loadingCampaigns"
+          :filter-query="campaignFilterQuery"
+          :filter-status="campaignFilterStatus"
+          :total-campaigns="campaigns.length"
           @select="selectCampaign"
           @refresh="refreshCampaignWorkspace()"
+          @update-filter-query="campaignFilterQuery = $event"
+          @update-filter-status="campaignFilterStatus = $event"
         />
 
         <CampaignWorkbench
           :campaign="selectedCampaignDetail"
           :linked-job="linkedJob"
           :loading="loadingCampaignDetail"
+          :retrying="retryingCampaignId === selectedCampaignDetail?.id"
+          @retry="retryCampaign"
+          @export="exportCampaignLeads"
         />
       </section>
 
@@ -445,41 +549,47 @@ onUnmounted(() => {
                 <p class="panel-kicker">{{ t("jobs.telemetryKicker") }}</p>
                 <h2>{{ t("jobs.telemetryTitle") }}</h2>
               </div>
-              <StatusBadge v-if="linkedJob" :status="linkedJob.status" />
+              <StatusBadge v-if="selectedJob" :status="selectedJob.status" />
             </div>
-            <dl v-if="linkedJob" class="detail-grid">
+            <dl v-if="selectedJob" class="detail-grid">
               <div>
                 <dt>{{ t("campaigns.detail.jobId") }}</dt>
-                <dd>{{ linkedJob.id }}</dd>
+                <dd>{{ selectedJob.id }}</dd>
               </div>
               <div>
                 <dt>{{ t("jobs.campaignLink") }}</dt>
-                <dd>{{ linkedJob.campaign_id ?? t("common.unlinked") }}</dd>
+                <dd>{{ selectedJob.campaign_id ?? t("common.unlinked") }}</dd>
               </div>
               <div>
                 <dt>{{ t("jobs.created") }}</dt>
-                <dd>{{ linkedJob.created_at }}</dd>
+                <dd>{{ selectedJob.created_at }}</dd>
               </div>
               <div>
                 <dt>{{ t("jobs.completed") }}</dt>
-                <dd>{{ linkedJob.completed_at ?? t("common.pending") }}</dd>
+                <dd>{{ selectedJob.completed_at ?? t("common.pending") }}</dd>
               </div>
               <div>
                 <dt>{{ t("jobs.requested") }}</dt>
-                <dd>{{ linkedJob.max_results }}</dd>
+                <dd>{{ selectedJob.max_results }}</dd>
               </div>
               <div>
                 <dt>{{ t("jobs.returned") }}</dt>
-                <dd>{{ linkedJob.result_count }}</dd>
+                <dd>{{ selectedJob.result_count }}</dd>
               </div>
             </dl>
             <div v-else class="empty-state compact-empty">
-              <p>{{ t("common.noLinkedJobSelected") }}</p>
-              <span>{{ t("campaigns.telemetryEmptyDescription") }}</span>
+              <p>{{ t("common.noJobSelected") }}</p>
+              <span>{{ t("jobs.centerDescription") }}</span>
             </div>
           </section>
 
-          <ResultTable :payload="selectedJobResults" :loading="loadingJobResults" />
+          <ResultTable
+            :payload="selectedJobResults"
+            :loading="loadingJobResults"
+            :retrying="retryingJobId === selectedJobResults?.job.id"
+            @export="exportJobLeads"
+            @retry="retryJob"
+          />
         </OperationsCenter>
       </section>
 
@@ -515,8 +625,6 @@ onUnmounted(() => {
               <dd>{{ selectedCampaign?.id?.slice(0, 8) ?? t("common.none") }}</dd>
             </div>
           </dl>
-
-          <p v-if="message" class="inline-message">{{ message }}</p>
         </section>
       </section>
     </ConsoleShell>

@@ -21,6 +21,7 @@ export interface ScrapedLead {
   name: string;
   address: string;
   phone: string | null;
+  email: string | null;
   website: string | null;
   reference_link: string | null;
   rating: string | null;

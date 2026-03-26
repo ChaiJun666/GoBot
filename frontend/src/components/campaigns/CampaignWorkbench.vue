@@ -3,12 +3,17 @@ import { useI18n } from "vue-i18n";
 
 import StatusBadge from "@/components/StatusBadge.vue";
 import LeadInspectorTable from "@/components/campaigns/LeadInspectorTable.vue";
-import type { CampaignDetail, ScrapeJobSummary } from "@/types";
+import type { CampaignDetail, EnrichedLead, ScrapeJobSummary } from "@/types";
 
 defineProps<{
   campaign: CampaignDetail | null;
   linkedJob: ScrapeJobSummary | null;
   loading: boolean;
+  retrying: boolean;
+}>();
+const emit = defineEmits<{
+  retry: [campaignId: string];
+  export: [leads: EnrichedLead[]];
 }>();
 
 const { t } = useI18n();
@@ -22,7 +27,18 @@ const { t } = useI18n();
           <p class="panel-kicker">{{ t("campaigns.selectedKicker") }}</p>
           <h2>{{ campaign ? campaign.name : t("campaigns.workbenchTitle") }}</h2>
         </div>
-        <StatusBadge v-if="campaign" :status="campaign.status" />
+        <div class="panel-actions">
+          <button
+            v-if="campaign?.status === 'failed'"
+            class="ghost-button"
+            type="button"
+            :disabled="retrying"
+            @click="emit('retry', campaign.id)"
+          >
+            {{ retrying ? t("actions.retrying") : t("actions.retry") }}
+          </button>
+          <StatusBadge v-if="campaign" :status="campaign.status" />
+        </div>
       </div>
 
       <template v-if="campaign">
@@ -66,7 +82,7 @@ const { t } = useI18n();
       </div>
     </section>
 
-    <LeadInspectorTable :campaign="campaign" :loading="loading" />
+    <LeadInspectorTable :campaign="campaign" :loading="loading" @export="emit('export', $event)" />
 
     <details class="panel panel-detail telemetry-disclosure" :open="Boolean(linkedJob && campaign)">
       <summary>{{ t("campaigns.telemetryTitle") }}</summary>

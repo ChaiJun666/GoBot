@@ -193,6 +193,21 @@ class Database:
             error_message=error_message,
         )
 
+    def retry_job(self, job_id: str) -> None:
+        now = utc_now_iso()
+        self._update_record(
+            "scrape_jobs",
+            "id",
+            job_id,
+            status="queued",
+            result_count=0,
+            results_json="[]",
+            error_message=None,
+            started_at=None,
+            completed_at=None,
+            updated_at=now,
+        )
+
     def mark_campaign_running(self, campaign_id: str) -> None:
         now = utc_now_iso()
         self._update_record(
@@ -239,6 +254,23 @@ class Database:
             completed_at=now,
             updated_at=now,
             error_message=error_message,
+        )
+
+    def retry_campaign(self, campaign_id: str) -> None:
+        now = utc_now_iso()
+        self._update_record(
+            "campaigns",
+            "id",
+            campaign_id,
+            status="queued",
+            total_leads=0,
+            average_score=0,
+            priority_leads=0,
+            results_json="[]",
+            error_message=None,
+            started_at=None,
+            completed_at=None,
+            updated_at=now,
         )
 
     def list_jobs(self, *, limit: int) -> list[dict[str, Any]]:

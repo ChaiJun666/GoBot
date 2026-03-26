@@ -26,6 +26,7 @@ class ScrapedLead(BaseModel):
     name: str
     address: str
     phone: str | None = None
+    email: str | None = None
     website: str | None = None
     reference_link: str | None = None
     rating: str | None = None

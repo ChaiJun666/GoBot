@@ -2,11 +2,14 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
-import type { CampaignDetail } from "@/types";
+import type { CampaignDetail, EnrichedLead } from "@/types";
 
 const props = defineProps<{
   campaign: CampaignDetail | null;
   loading: boolean;
+}>();
+const emit = defineEmits<{
+  export: [leads: EnrichedLead[]];
 }>();
 
 const filterText = ref("");
@@ -46,24 +49,31 @@ const filteredResults = computed(() => {
 
     <template v-if="campaign">
       <label class="filter-field">
-        <span>{{ t("campaigns.filterLeads") }}</span>
+        <span>{{ t("leadTable.searchLabel") }}</span>
         <input
           v-model="filterText"
           type="search"
-          :placeholder="t('campaigns.filterPlaceholder')"
+          :placeholder="t('leadTable.searchCampaignPlaceholder')"
         />
       </label>
+
+      <div class="panel-actions">
+        <button class="ghost-button" type="button" @click="emit('export', filteredResults)">
+          {{ t("actions.exportLeads") }}
+        </button>
+      </div>
 
       <div v-if="filteredResults.length" class="table-shell">
         <table>
           <thead>
             <tr>
-              <th>{{ t("campaigns.table.name") }}</th>
-              <th>{{ t("campaigns.table.priority") }}</th>
-              <th>{{ t("campaigns.table.score") }}</th>
-              <th>{{ t("campaigns.table.category") }}</th>
-              <th>{{ t("campaigns.table.phone") }}</th>
-              <th>{{ t("campaigns.table.website") }}</th>
+              <th>{{ t("leadTable.columns.business") }}</th>
+              <th>{{ t("leadTable.columns.priority") }}</th>
+              <th>{{ t("leadTable.columns.score") }}</th>
+              <th>{{ t("leadTable.columns.category") }}</th>
+              <th>{{ t("leadTable.columns.phone") }}</th>
+              <th>{{ t("leadTable.columns.email") }}</th>
+              <th>{{ t("leadTable.columns.website") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -76,6 +86,7 @@ const filteredResults = computed(() => {
               <td>{{ lead.intelligence.score }}</td>
               <td>{{ lead.intelligence.category }}</td>
               <td>{{ lead.phone || "-" }}</td>
+              <td>{{ lead.email || t("common.unavailable") }}</td>
               <td>
                 <a v-if="lead.website" :href="lead.website" target="_blank" rel="noreferrer">{{ t("common.visit") }}</a>
                 <span v-else>-</span>
@@ -85,14 +96,14 @@ const filteredResults = computed(() => {
         </table>
       </div>
       <div v-else class="empty-state">
-        <p>{{ t("campaigns.emptyFilteredTitle") }}</p>
-        <span>{{ t("campaigns.emptyFilteredDescription") }}</span>
+        <p>{{ t("leadTable.emptyTitle") }}</p>
+        <span>{{ t("leadTable.emptyDescription") }}</span>
       </div>
     </template>
 
     <div v-else class="empty-state">
       <p>{{ loading ? t("common.loadingCampaign") : t("common.noCampaignSelected") }}</p>
-      <span>{{ t("campaigns.emptyLeadsDescription") }}</span>
+      <span>{{ t("leadTable.noCampaignDescription") }}</span>
     </div>
   </section>
 </template>

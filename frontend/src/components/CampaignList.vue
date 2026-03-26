@@ -2,20 +2,26 @@
 import { useI18n } from "vue-i18n";
 
 import StatusBadge from "@/components/StatusBadge.vue";
-import type { CampaignSummary } from "@/types";
+import type { CampaignStatus, CampaignSummary } from "@/types";
 
-defineProps<{
+const props = defineProps<{
   campaigns: CampaignSummary[];
   selectedCampaignId: string | null;
   loading: boolean;
+  filterQuery: string;
+  filterStatus: CampaignStatus | "all";
+  totalCampaigns: number;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   select: [campaignId: string];
   refresh: [];
+  updateFilterQuery: [value: string];
+  updateFilterStatus: [value: CampaignStatus | "all"];
 }>();
 
 const { t } = useI18n();
+const statusOptions: Array<CampaignStatus | "all"> = ["all", "queued", "running", "completed", "failed"];
 
 function formatDate(value: string | null): string {
   if (!value) {
@@ -28,6 +34,14 @@ function formatDate(value: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function onFilterQueryInput(event: Event) {
+  emit("updateFilterQuery", (event.target as HTMLInputElement).value);
+}
+
+function onFilterStatusChange(event: Event) {
+  emit("updateFilterStatus", (event.target as HTMLSelectElement).value as CampaignStatus | "all");
 }
 </script>
 
@@ -42,6 +56,32 @@ function formatDate(value: string | null): string {
         {{ loading ? `${t("actions.refresh")}...` : t("actions.refresh") }}
       </button>
     </div>
+
+    <div class="inline-filter-grid">
+      <label class="filter-field">
+        <span>{{ t("filters.searchCampaignsLabel") }}</span>
+        <input
+          :value="filterQuery"
+          type="search"
+          :placeholder="t('filters.searchCampaignsPlaceholder')"
+          @input="onFilterQueryInput"
+        />
+      </label>
+
+      <label class="filter-field">
+        <span>{{ t("filters.statusLabel") }}</span>
+        <select
+          :value="filterStatus"
+          @change="onFilterStatusChange"
+        >
+          <option v-for="status in statusOptions" :key="status" :value="status">
+            {{ status === "all" ? t("filters.allStatuses") : t(`status.${status}`) }}
+          </option>
+        </select>
+      </label>
+    </div>
+
+    <p class="list-meta">{{ t("filters.filteredCount", { visible: props.campaigns.length, total: props.totalCampaigns }) }}</p>
 
     <div v-if="campaigns.length" class="job-list">
       <button
@@ -74,8 +114,8 @@ function formatDate(value: string | null): string {
     </div>
 
     <div v-else class="empty-state">
-      <p>{{ t("campaigns.queueEmptyTitle") }}</p>
-      <span>{{ t("campaigns.queueEmptyDescription") }}</span>
+      <p>{{ totalCampaigns ? t("campaigns.queueFilteredEmptyTitle") : t("campaigns.queueEmptyTitle") }}</p>
+      <span>{{ totalCampaigns ? t("campaigns.queueFilteredEmptyDescription") : t("campaigns.queueEmptyDescription") }}</span>
     </div>
   </section>
 </template>

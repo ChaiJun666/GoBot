@@ -19,6 +19,8 @@ vi.mock("@/lib/api", () => ({
     listJobs: vi.fn(async () => []),
     getCampaign: vi.fn(),
     getJobResults: vi.fn(),
+    retryCampaign: vi.fn(),
+    retryJob: vi.fn(),
     createCampaign: vi.fn(),
   },
 }));

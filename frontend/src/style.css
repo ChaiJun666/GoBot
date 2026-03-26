@@ -110,6 +110,10 @@ a {
   gap: 24px;
 }
 
+.global-message {
+  margin: 0 0 8px;
+}
+
 .primary-nav {
   display: grid;
   gap: 10px;
@@ -330,6 +334,13 @@ a {
   margin-bottom: 18px;
 }
 
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .composer-form {
   display: grid;
   gap: 16px;
@@ -339,6 +350,13 @@ a {
 .filter-field {
   display: grid;
   gap: 8px;
+}
+
+.inline-filter-grid {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr;
+  gap: 16px;
+  margin-bottom: 12px;
 }
 
 .composer-form span,
@@ -483,6 +501,12 @@ textarea {
   font-size: 0.84rem;
 }
 
+.list-meta {
+  margin: 0 0 18px;
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+}
+
 .results-summary,
 .health-grid,
 .detail-grid {
@@ -516,7 +540,7 @@ textarea {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 720px;
+  min-width: 860px;
 }
 
 thead th {
@@ -586,7 +610,8 @@ tbody td {
   .results-summary,
   .health-grid,
   .detail-grid,
-  .composer-grid {
+  .composer-grid,
+  .inline-filter-grid {
     grid-template-columns: 1fr;
   }
 

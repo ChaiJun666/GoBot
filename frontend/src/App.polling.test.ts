@@ -15,6 +15,8 @@ const apiMocks = vi.hoisted(() => ({
   listJobs: vi.fn(),
   getCampaign: vi.fn(),
   getJobResults: vi.fn(),
+  retryCampaign: vi.fn(),
+  retryJob: vi.fn(),
   createCampaign: vi.fn(),
 }));
 

@@ -29,6 +29,13 @@ def normalize_phone_number(phone: Any) -> str | None:
     return digits
 
 
+def normalize_email(value: Any) -> str | None:
+    text = normalize_text(value)
+    if text is None or "@" not in text:
+        return None
+    return text.casefold()
+
+
 def normalize_website(value: Any) -> str | None:
     website = normalize_text(value)
     if website is None:
@@ -54,6 +61,7 @@ def normalize_lead(payload: Mapping[str, Any], *, source: str) -> ScrapedLead | 
         name=name,
         address=address,
         phone=normalize_phone_number(payload.get("phone")),
+        email=normalize_email(payload.get("email")),
         website=website,
         reference_link=reference_link,
         rating=rating,

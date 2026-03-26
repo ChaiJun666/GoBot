@@ -47,6 +47,7 @@ describe("CampaignWorkbench", () => {
         campaign,
         linkedJob,
         loading: false,
+        retrying: false,
       },
     });
 

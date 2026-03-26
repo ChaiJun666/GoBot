@@ -61,6 +61,26 @@ async def list_campaigns(
     return [CampaignSummary.from_record(item) for item in database.list_campaigns(limit=limit)]
 
 
+@router.post("/{campaign_id}/retry", response_model=CampaignSummary, status_code=status.HTTP_202_ACCEPTED)
+async def retry_campaign(campaign_id: str, request: Request) -> CampaignSummary:
+    database = get_database(request)
+    job_manager = get_job_manager(request)
+    campaign = database.get_campaign(campaign_id)
+    if campaign is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    if campaign["status"] != "failed":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only failed campaigns can be retried")
+
+    database.retry_campaign(campaign_id)
+    database.retry_job(campaign["job_id"])
+    await job_manager.enqueue(campaign["job_id"])
+
+    refreshed = database.get_campaign(campaign_id)
+    if refreshed is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retry campaign")
+    return CampaignSummary.from_record(refreshed)
+
+
 @router.get("/{campaign_id}", response_model=CampaignDetail)
 async def get_campaign(campaign_id: str, request: Request) -> CampaignDetail:
     database = get_database(request)

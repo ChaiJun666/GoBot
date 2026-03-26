@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from html import unescape
@@ -27,6 +28,7 @@ PLACE_ID_PREFIX = "ChI"
 TEL_PREFIX = "tel:"
 XSSI_PREFIX = ")]}'"
 PHONE_PATTERN = re.compile(r"(?:\+?\d[\d\s().-]{6,}\d)")
+EMAIL_PATTERN = re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
 
 
 class GoogleMapsScrapeProvider(ScrapeProvider):
@@ -51,7 +53,9 @@ class GoogleMapsScrapeProvider(ScrapeProvider):
             for item in raw_results
             if (normalized_lead := normalize_lead(item, source=self.source)) is not None
         ]
-        return deduplicate_leads(normalized)[:max_results]
+        deduplicated = deduplicate_leads(normalized)[:max_results]
+        await self._populate_emails(deduplicated)
+        return deduplicated
 
     def _build_search_url(self, query: str) -> str:
         quoted_query = quote(query)
@@ -149,11 +153,13 @@ class GoogleMapsScrapeProvider(ScrapeProvider):
         rating = normalize_text(rating_value)
         website = self._extract_website(details)
         phone = self._extract_phone(details)
+        email = self._extract_email(details)
 
         return {
             "name": name,
             "address": address,
             "phone": phone,
+            "email": email,
             "website": website,
             "reference_link": self._build_reference_link(details, name=name, address=address),
             "rating": rating,
@@ -206,6 +212,52 @@ class GoogleMapsScrapeProvider(ScrapeProvider):
                 return value.removeprefix(TEL_PREFIX)
 
         return None
+
+    def _extract_email(self, details: list[Any]) -> str | None:
+        for value in self._walk_strings(details):
+            if not isinstance(value, str):
+                continue
+            match = EMAIL_PATTERN.search(value)
+            if match:
+                return match.group(0).casefold()
+        return None
+
+    async def _populate_emails(self, leads: list[ScrapedLead]) -> None:
+        await asyncio.gather(
+            *(self._populate_email_for_lead(lead) for lead in leads),
+            return_exceptions=True,
+        )
+
+    async def _populate_email_for_lead(self, lead: ScrapedLead) -> None:
+        if lead.email or not lead.website:
+            return
+
+        email = await self._fetch_email_from_website(lead.website)
+        if email:
+            lead.email = email
+
+    async def _fetch_email_from_website(self, website: str) -> str | None:
+        try:
+            response = await self._fetch(website)
+        except Exception:
+            return None
+
+        content = " ".join(
+            fragment
+            for fragment in (
+                getattr(response, "html_content", None),
+                response.get_all_text() if hasattr(response, "get_all_text") else None,
+            )
+            if fragment
+        )
+        if not content:
+            return None
+
+        match = EMAIL_PATTERN.search(unescape(content))
+        if match is None:
+            return None
+
+        return match.group(0).casefold()
 
     def _decode_google_redirect(self, value: Any) -> str | None:
         if not isinstance(value, str):

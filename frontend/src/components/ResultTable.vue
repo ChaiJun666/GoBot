@@ -3,11 +3,16 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import StatusBadge from "@/components/StatusBadge.vue";
-import type { ScrapeJobResultsResponse } from "@/types";
+import type { ScrapeJobResultsResponse, ScrapedLead } from "@/types";
 
 const props = defineProps<{
   payload: ScrapeJobResultsResponse | null;
   loading: boolean;
+  retrying: boolean;
+}>();
+const emit = defineEmits<{
+  export: [leads: ScrapedLead[]];
+  retry: [jobId: string];
 }>();
 
 const filterText = ref("");
@@ -24,7 +29,7 @@ const filteredResults = computed(() => {
   }
 
   return props.payload.results.filter((lead) =>
-    [lead.name, lead.address, lead.phone, lead.website]
+    [lead.name, lead.address, lead.phone, lead.email, lead.website]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(needle)),
   );
@@ -50,7 +55,26 @@ function formatDate(value: string | null): string {
         <p class="panel-kicker">{{ t("jobs.resultsKicker") }}</p>
         <h2>{{ t("jobs.resultsTitle") }}</h2>
       </div>
-      <StatusBadge v-if="payload" :status="payload.job.status" />
+      <div class="panel-actions">
+        <button
+          v-if="payload?.job.status === 'failed'"
+          class="ghost-button"
+          type="button"
+          :disabled="retrying"
+          @click="emit('retry', payload.job.id)"
+        >
+          {{ retrying ? t("actions.retrying") : t("actions.retry") }}
+        </button>
+        <button
+          v-if="payload"
+          class="ghost-button"
+          type="button"
+          @click="emit('export', filteredResults)"
+        >
+          {{ t("actions.exportLeads") }}
+        </button>
+        <StatusBadge v-if="payload" :status="payload.job.status" />
+      </div>
     </div>
 
     <template v-if="payload">
@@ -70,19 +94,20 @@ function formatDate(value: string | null): string {
       </div>
 
       <label class="filter-field">
-        <span>{{ t("jobs.filterLeads") }}</span>
-        <input v-model="filterText" type="search" :placeholder="t('jobs.filterPlaceholder')" />
+        <span>{{ t("leadTable.searchLabel") }}</span>
+        <input v-model="filterText" type="search" :placeholder="t('leadTable.searchJobPlaceholder')" />
       </label>
 
       <div v-if="filteredResults.length" class="table-shell">
         <table>
           <thead>
             <tr>
-              <th>{{ t("jobs.table.name") }}</th>
-              <th>{{ t("jobs.table.address") }}</th>
-              <th>{{ t("jobs.table.phone") }}</th>
-              <th>{{ t("jobs.table.rating") }}</th>
-              <th>{{ t("jobs.table.website") }}</th>
+              <th>{{ t("leadTable.columns.business") }}</th>
+              <th>{{ t("leadTable.columns.address") }}</th>
+              <th>{{ t("leadTable.columns.phone") }}</th>
+              <th>{{ t("leadTable.columns.email") }}</th>
+              <th>{{ t("leadTable.columns.rating") }}</th>
+              <th>{{ t("leadTable.columns.website") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -90,6 +115,7 @@ function formatDate(value: string | null): string {
               <td>{{ lead.name }}</td>
               <td>{{ lead.address }}</td>
               <td>{{ lead.phone || "-" }}</td>
+              <td>{{ lead.email || t("common.unavailable") }}</td>
               <td>{{ lead.rating || "-" }}</td>
               <td>
                 <a v-if="lead.website" :href="lead.website" target="_blank" rel="noreferrer">
@@ -102,14 +128,14 @@ function formatDate(value: string | null): string {
         </table>
       </div>
       <div v-else class="empty-state">
-        <p>{{ t("jobs.emptyFilteredTitle") }}</p>
-        <span>{{ t("jobs.emptyFilteredDescription") }}</span>
+        <p>{{ t("leadTable.emptyTitle") }}</p>
+        <span>{{ t("leadTable.emptyDescription") }}</span>
       </div>
     </template>
 
     <div v-else class="empty-state">
       <p>{{ loading ? t("common.loadingJob") : t("common.noJobSelected") }}</p>
-      <span>{{ t("jobs.emptyResultsDescription") }}</span>
+      <span>{{ t("leadTable.noJobDescription") }}</span>
     </div>
   </section>
 </template>

@@ -72,6 +72,7 @@ def test_database_persists_campaign_and_enriched_results(tmp_path: Path) -> None
                 name="Lead One",
                 address="Bandung",
                 phone="08123456789",
+                email="team@example.com",
                 source="google_maps",
                 intelligence=LeadIntelligence(
                     score=88,
@@ -101,3 +102,47 @@ def test_database_persists_campaign_and_enriched_results(tmp_path: Path) -> None
     assert campaign["average_score"] == 88
     assert campaign["priority_leads"] == 1
     assert campaign["results"][0].intelligence.priority == "HIGH"
+    assert campaign["results"][0].email == "team@example.com"
+
+
+def test_database_retries_failed_job_and_campaign(tmp_path: Path) -> None:
+    database = Database(tmp_path / "app.db")
+    database.initialize()
+    database.create_job(
+        job_id="job-3",
+        campaign_id="campaign-3",
+        query="Dentist Shanghai",
+        source="google_maps",
+        max_results=10,
+    )
+    database.create_campaign(
+        campaign_id="campaign-3",
+        job_id="job-3",
+        name="Shanghai dentists",
+        industry="healthcare",
+        location="Shanghai",
+        query="Dentist Shanghai",
+        source="google_maps",
+        max_results=10,
+    )
+
+    database.fail_job("job-3", "network timeout")
+    database.fail_campaign("campaign-3", "network timeout")
+
+    database.retry_job("job-3")
+    database.retry_campaign("campaign-3")
+
+    job = database.get_job("job-3")
+    campaign = database.get_campaign("campaign-3")
+
+    assert job is not None
+    assert campaign is not None
+    assert job["status"] == "queued"
+    assert job["result_count"] == 0
+    assert job["error_message"] is None
+    assert len(job["results"]) == 0
+    assert campaign["status"] == "queued"
+    assert campaign["total_leads"] == 0
+    assert campaign["priority_leads"] == 0
+    assert campaign["error_message"] is None
+    assert len(campaign["results"]) == 0
