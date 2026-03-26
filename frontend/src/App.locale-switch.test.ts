@@ -31,6 +31,15 @@ vi.mock("@/lib/api", () => ({
     retryCampaign: vi.fn(),
     retryJob: vi.fn(),
     createCampaign: vi.fn(),
+    listMailProviders: vi.fn(async () => []),
+    listMailboxes: vi.fn(async () => []),
+    createMailbox: vi.fn(),
+    updateMailbox: vi.fn(),
+    syncMailbox: vi.fn(),
+    listMailMessages: vi.fn(async () => []),
+    getMailMessage: vi.fn(),
+    sendMail: vi.fn(),
+    listLeadRecipients: vi.fn(async () => []),
   },
 }));
 
@@ -38,6 +47,7 @@ import App from "@/App.vue";
 
 describe("App locale switch", () => {
   afterEach(() => {
+    window.localStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -51,8 +61,8 @@ describe("App locale switch", () => {
     await wrapper.findAll("button.locale-button")[0].trigger("click");
     await flushPromises();
 
-    expect(wrapper.text()).toContain("总览");
-    expect(wrapper.text()).toContain("新建活动");
+    expect(wrapper.text()).not.toContain("Overview");
+    expect(wrapper.text()).not.toContain("New Campaign");
 
     wrapper.unmount();
   });

@@ -21,6 +21,15 @@ const apiMocks = vi.hoisted(() => ({
   retryCampaign: vi.fn(),
   retryJob: vi.fn(),
   createCampaign: vi.fn(),
+  listMailProviders: vi.fn(),
+  listMailboxes: vi.fn(),
+  createMailbox: vi.fn(),
+  updateMailbox: vi.fn(),
+  syncMailbox: vi.fn(),
+  listMailMessages: vi.fn(),
+  getMailMessage: vi.fn(),
+  sendMail: vi.fn(),
+  listLeadRecipients: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -153,6 +162,10 @@ describe("App polling behavior", () => {
       last_error: null,
       updated_at: null,
     });
+    apiMocks.listMailProviders.mockResolvedValue([]);
+    apiMocks.listMailboxes.mockResolvedValue([]);
+    apiMocks.listLeadRecipients.mockResolvedValue([]);
+    apiMocks.listMailMessages.mockResolvedValue([]);
     apiMocks.getCampaign.mockImplementation(async (campaignId: string) => {
       const campaign = campaignDetails.get(campaignId);
       if (!campaign) {
@@ -181,7 +194,7 @@ describe("App polling behavior", () => {
     await flushPromises();
 
     const navButtons = wrapper.findAll(".primary-nav-button");
-    await navButtons[3].trigger("click");
+    await navButtons[4].trigger("click");
     await flushPromises();
 
     expect(wrapper.get(".primary-nav-button.active .primary-nav-label").text()).toBe("Connections");
@@ -190,13 +203,13 @@ describe("App polling behavior", () => {
     await flushPromises();
 
     expect(wrapper.get(".primary-nav-button.active .primary-nav-label").text()).toBe("Campaigns");
-    expect(wrapper.text()).not.toContain("Refresh...");
+    expect(wrapper.text()).not.toContain("Refreshing workspace");
 
     await vi.advanceTimersByTimeAsync(5000);
     await flushPromises();
 
     expect(wrapper.get(".primary-nav-button.active .primary-nav-label").text()).toBe("Campaigns");
-    expect(wrapper.text()).not.toContain("Refresh...");
+    expect(wrapper.text()).not.toContain("Refreshing workspace");
 
     wrapper.unmount();
   });

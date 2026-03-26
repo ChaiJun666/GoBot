@@ -2,7 +2,7 @@ import { computed, ref } from "vue";
 
 import type { CampaignSummary, ScrapeJobSummary } from "@/types";
 
-export type ConsoleView = "overview" | "campaigns" | "jobs" | "system";
+export type ConsoleView = "overview" | "campaigns" | "mail" | "jobs" | "system";
 
 type WorkspaceCampaign = Pick<CampaignSummary, "id" | "job_id" | "status" | "total_leads">;
 type WorkspaceJob = Pick<ScrapeJobSummary, "id" | "campaign_id" | "status" | "result_count">;

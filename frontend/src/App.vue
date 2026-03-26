@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+﻿<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import CampaignCreationDrawer from "@/components/campaigns/CampaignCreationDrawer.vue";
@@ -8,6 +8,7 @@ import CampaignList from "@/components/CampaignList.vue";
 import InlineStatusNotice from "@/components/InlineStatusNotice.vue";
 import JobList from "@/components/JobList.vue";
 import ConsoleShell from "@/components/layout/ConsoleShell.vue";
+import MailWorkspace from "@/components/mail/MailWorkspace.vue";
 import OperationsCenter from "@/components/jobs/OperationsCenter.vue";
 import MetricCard from "@/components/MetricCard.vue";
 import ResultTable from "@/components/ResultTable.vue";
@@ -21,15 +22,24 @@ import type {
   CampaignDetail,
   CampaignStatus,
   CampaignSummary,
+  CreateMailboxRequest,
   ConnectLinkedInSessionRequest,
   CreateCampaignRequest,
   EnrichedLead,
   HealthResponse,
+  LeadRecipientSummary,
   LinkedInSessionStatus,
+  MailFolder,
+  MailMessageDetail,
+  MailMessageSummary,
+  MailProviderConfig,
+  MailboxSummary,
   ScrapedLead,
   ScrapeJobResultsResponse,
   ScrapeJobSummary,
   ScrapeSource,
+  SendMailRequest,
+  UpdateMailboxRequest,
 } from "@/types";
 
 const campaigns = ref<CampaignSummary[]>([]);
@@ -38,14 +48,28 @@ const jobs = ref<ScrapeJobSummary[]>([]);
 const selectedJobResults = ref<ScrapeJobResultsResponse | null>(null);
 const health = ref<HealthResponse | null>(null);
 const linkedinSession = ref<LinkedInSessionStatus | null>(null);
+const mailProviders = ref<MailProviderConfig[]>([]);
+const mailboxes = ref<MailboxSummary[]>([]);
+const selectedMailboxId = ref<string | null>(null);
+const currentMailFolder = ref<MailFolder>("inbox");
+const mailMessages = ref<MailMessageSummary[]>([]);
+const selectedMailMessage = ref<MailMessageDetail | null>(null);
+const leadRecipients = ref<LeadRecipientSummary[]>([]);
 const loadingCampaigns = ref(false);
 const loadingCampaignDetail = ref(false);
 const loadingJobs = ref(false);
 const loadingJobResults = ref(false);
 const loadingLinkedInSession = ref(false);
+const loadingMailboxes = ref(false);
+const loadingMailMessages = ref(false);
+const loadingMailMessageDetail = ref(false);
 const creatingCampaign = ref(false);
 const syncingLinkedInSession = ref(false);
+const savingMailbox = ref(false);
+const sendingMail = ref(false);
+const syncingMailboxId = ref<string | null>(null);
 const campaignDrawerOpen = ref(false);
+const mailComposerOpen = ref(false);
 const message = ref<string | null>(null);
 const messageTone = ref<"info" | "success" | "warning" | "danger">("info");
 const campaignFilterQuery = ref("");
@@ -79,6 +103,9 @@ const selectedJob = computed(
 const linkedJob = computed(
   () => jobs.value.find((job) => job.id === selectedCampaign.value?.job_id) ?? null,
 );
+const selectedMailbox = computed(
+  () => mailboxes.value.find((mailbox) => mailbox.id === selectedMailboxId.value) ?? null,
+);
 
 const localeOptions = [
   { value: "zh-CN" as AppLocale, label: "简体中文" },
@@ -88,6 +115,7 @@ const localeOptions = [
 const navItems = computed(() => [
   { value: "overview" as ConsoleView, label: t("nav.overview"), hint: t("navHints.overview") },
   { value: "campaigns" as ConsoleView, label: t("nav.campaigns"), hint: t("navHints.campaigns") },
+  { value: "mail" as ConsoleView, label: t("nav.mail"), hint: t("navHints.mail") },
   { value: "jobs" as ConsoleView, label: t("nav.jobs"), hint: t("navHints.jobs") },
   { value: "system" as ConsoleView, label: t("nav.system"), hint: t("navHints.system") },
 ]);
@@ -173,6 +201,9 @@ const headerMeta = computed(() => {
   if (activeView.value === "jobs") {
     return t("headerMeta.jobs", { count: jobs.value.length });
   }
+  if (activeView.value === "mail") {
+    return t("headerMeta.mail", { count: mailboxes.value.length });
+  }
   if (activeView.value === "system") {
     return t("headerMeta.system", {
       state: linkedinSession.value?.connected ? t("common.connected") : t("common.disconnected"),
@@ -198,6 +229,10 @@ const activityLabel = computed(() => {
   ).format(new Date(latest.updated_at))}`;
 });
 
+const headerActionLabel = computed(() =>
+  activeView.value === "mail" ? t("mail.compose") : t("actions.newCampaign"),
+);
+
 async function refreshHealth() {
   try {
     health.value = await api.getHealth();
@@ -219,6 +254,92 @@ async function refreshLinkedInSession(options: { mode?: RefreshMode } = {}) {
   } finally {
     if (mode === "visible") {
       loadingLinkedInSession.value = false;
+    }
+  }
+}
+
+async function refreshMailProviders() {
+  try {
+    mailProviders.value = await api.listMailProviders();
+  } catch (error) {
+    setMessage(error);
+  }
+}
+
+async function refreshMailboxes(options: { mode?: RefreshMode } = {}) {
+  const mode = options.mode ?? "visible";
+  if (mode === "visible") {
+    loadingMailboxes.value = true;
+  }
+
+  try {
+    mailboxes.value = await api.listMailboxes();
+    if (!mailboxes.value.length) {
+      selectedMailboxId.value = null;
+      mailMessages.value = [];
+      selectedMailMessage.value = null;
+      return;
+    }
+
+    if (!selectedMailboxId.value || !mailboxes.value.some((mailbox) => mailbox.id === selectedMailboxId.value)) {
+      selectedMailboxId.value = mailboxes.value[0].id;
+    }
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    if (mode === "visible") {
+      loadingMailboxes.value = false;
+    }
+  }
+}
+
+async function refreshLeadRecipients() {
+  try {
+    leadRecipients.value = await api.listLeadRecipients();
+  } catch (error) {
+    setMessage(error);
+  }
+}
+
+async function refreshMailMessages(options: { mode?: RefreshMode } = {}) {
+  if (!selectedMailboxId.value) {
+    mailMessages.value = [];
+    selectedMailMessage.value = null;
+    return;
+  }
+
+  const mode = options.mode ?? "visible";
+  if (mode === "visible") {
+    loadingMailMessages.value = true;
+  }
+
+  try {
+    mailMessages.value = await api.listMailMessages(selectedMailboxId.value, currentMailFolder.value);
+    if (!mailMessages.value.some((message) => message.id === selectedMailMessage.value?.id)) {
+      selectedMailMessage.value = null;
+    }
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    if (mode === "visible") {
+      loadingMailMessages.value = false;
+    }
+  }
+}
+
+async function loadMailMessage(messageId: string, options: { mode?: RefreshMode } = {}) {
+  const mode = options.mode ?? "visible";
+  if (mode === "visible") {
+    loadingMailMessageDetail.value = true;
+  }
+
+  try {
+    selectedMailMessage.value = await api.getMailMessage(messageId);
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    if (mode === "visible") {
+      loadingMailMessageDetail.value = false;
     }
   }
 }
@@ -360,6 +481,67 @@ async function createCampaign(payload: CreateCampaignRequest) {
   }
 }
 
+async function createMailbox(payload: CreateMailboxRequest) {
+  savingMailbox.value = true;
+  try {
+    const mailbox = await api.createMailbox(payload);
+    message.value = `${t("messages.mailboxConnectedPrefix")} ${mailbox.email_address}`;
+    messageTone.value = "success";
+    await Promise.all([refreshMailboxes(), refreshLeadRecipients()]);
+    selectedMailboxId.value = mailbox.id;
+    currentMailFolder.value = "inbox";
+    await refreshMailMessages();
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    savingMailbox.value = false;
+  }
+}
+
+async function updateMailbox(mailboxId: string, payload: UpdateMailboxRequest) {
+  savingMailbox.value = true;
+  try {
+    const mailbox = await api.updateMailbox(mailboxId, payload);
+    message.value = `${t("messages.mailboxUpdatedPrefix")} ${mailbox.email_address}`;
+    messageTone.value = "success";
+    await refreshMailboxes();
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    savingMailbox.value = false;
+  }
+}
+
+async function syncMailbox(mailboxId: string) {
+  syncingMailboxId.value = mailboxId;
+  try {
+    await api.syncMailbox(mailboxId);
+    await Promise.all([refreshMailboxes(), refreshMailMessages(), refreshLeadRecipients()]);
+    message.value = t("mail.mailboxSynced");
+    messageTone.value = "success";
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    syncingMailboxId.value = null;
+  }
+}
+
+async function sendMail(payload: SendMailRequest) {
+  sendingMail.value = true;
+  try {
+    const response = await api.sendMail(payload);
+    message.value = `${t("messages.mailSentPrefix")} ${response.accepted.join(", ")}`;
+    messageTone.value = "success";
+    mailComposerOpen.value = false;
+    currentMailFolder.value = "sent";
+    await refreshMailMessages();
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    sendingMail.value = false;
+  }
+}
+
 async function connectLinkedInSession(payload: ConnectLinkedInSessionRequest) {
   syncingLinkedInSession.value = true;
   try {
@@ -386,6 +568,20 @@ async function disconnectLinkedInSession() {
   }
 }
 
+async function selectMailbox(mailboxId: string) {
+  selectedMailboxId.value = mailboxId;
+  currentMailFolder.value = "inbox";
+  selectedMailMessage.value = null;
+  mailComposerOpen.value = false;
+  await refreshMailMessages();
+}
+
+async function selectMailFolder(folder: MailFolder) {
+  currentMailFolder.value = folder;
+  selectedMailMessage.value = null;
+  await refreshMailMessages();
+}
+
 function setMessage(error: unknown) {
   message.value = error instanceof Error ? error.message : t("messages.unexpectedError");
   messageTone.value = "danger";
@@ -407,6 +603,19 @@ function openCampaignView() {
 
 function openSystemView() {
   activeView.value = "system";
+}
+
+function openMailComposer() {
+  activeView.value = "mail";
+  mailComposerOpen.value = true;
+}
+
+function handlePrimaryAction() {
+  if (activeView.value === "mail") {
+    openMailComposer();
+    return;
+  }
+  openCampaignView();
 }
 
 function buildExportFilename(prefix: "campaign" | "job", label: string) {
@@ -479,11 +688,28 @@ async function retryJob(jobId: string) {
 }
 
 async function bootstrap() {
-  await Promise.all([refreshHealth(), refreshCampaigns(), refreshJobs(), refreshLinkedInSession()]);
+  await Promise.all([
+    refreshHealth(),
+    refreshCampaigns(),
+    refreshJobs(),
+    refreshLinkedInSession(),
+    refreshMailProviders(),
+    refreshMailboxes(),
+    refreshLeadRecipients(),
+  ]);
   if (selectedCampaignId.value) {
     await refreshSelectedCampaign();
   }
 }
+
+watch(
+  () => activeView.value,
+  async (view) => {
+    if (view === "mail" && selectedMailboxId.value) {
+      await refreshMailMessages({ mode: "silent" });
+    }
+  },
+);
 
 onMounted(async () => {
   await bootstrap();
@@ -527,10 +753,10 @@ onUnmounted(() => {
       :meta="headerMeta"
       :active-locale="currentLocale"
       :locale-options="localeOptions"
-      :action-label="t('actions.newCampaign')"
+      :action-label="headerActionLabel"
       @select-view="setActiveView"
       @change-locale="setLocale"
-      @action="openCampaignView"
+      @action="handlePrimaryAction"
     >
       <CampaignCreationDrawer
         :open="campaignDrawerOpen"
@@ -703,6 +929,33 @@ onUnmounted(() => {
           :retrying="retryingCampaignId === selectedCampaignDetail?.id"
           @retry="retryCampaign"
           @export="exportCampaignLeads"
+        />
+      </section>
+
+      <section v-else-if="activeView === 'mail'" class="view-grid">
+        <MailWorkspace
+          :mailboxes="mailboxes"
+          :providers="mailProviders"
+          :selected-mailbox-id="selectedMailboxId"
+          :folder="currentMailFolder"
+          :messages="mailMessages"
+          :selected-message="selectedMailMessage"
+          :lead-recipients="leadRecipients"
+          :composer-open="mailComposerOpen"
+          :loading-mailboxes="loadingMailboxes"
+          :loading-messages="loadingMailMessages"
+          :loading-message-detail="loadingMailMessageDetail"
+          :saving-mailbox="savingMailbox"
+          :sending-mail="sendingMail"
+          :syncing-mailbox-id="syncingMailboxId"
+          @select-mailbox="selectMailbox"
+          @select-folder="selectMailFolder"
+          @select-message="loadMailMessage"
+          @create-mailbox="createMailbox"
+          @update-mailbox="updateMailbox"
+          @sync-mailbox="syncMailbox"
+          @send-mail="sendMail"
+          @update-composer-open="mailComposerOpen = $event"
         />
       </section>
 

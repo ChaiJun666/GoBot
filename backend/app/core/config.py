@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     serve_frontend: bool = True
 
     scraper_database_path: Path = Field(default=Path("data/app.db"))
+    mail_secret_key_path: Path = Field(default=Path("data/mail.key"))
     frontend_dist_path: Path = Field(default=Path("../frontend/dist"))
     scraper_timeout_ms: int = 60_000
     scraper_verify_tls: bool = False
@@ -44,6 +45,12 @@ class Settings(BaseSettings):
         if self.frontend_dist_path.is_absolute():
             return self.frontend_dist_path
         return BACKEND_DIR / self.frontend_dist_path
+
+    @property
+    def resolved_mail_secret_key_path(self) -> Path:
+        if self.mail_secret_key_path.is_absolute():
+            return self.mail_secret_key_path
+        return BACKEND_DIR / self.mail_secret_key_path
 
 
 @lru_cache(maxsize=1)

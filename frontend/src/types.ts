@@ -149,3 +149,106 @@ export interface HealthResponse {
     verify_tls: boolean;
   };
 }
+
+export type MailboxStatus = "ready" | "error";
+export type MailFolder = "inbox" | "sent";
+export type MailProviderKey =
+  | "163.com"
+  | "vip.163.com"
+  | "126.com"
+  | "vip.126.com"
+  | "188.com"
+  | "vip.188.com"
+  | "yeah.net"
+  | "gmail"
+  | "outlook"
+  | "qq";
+
+export interface MailProviderConfig {
+  key: MailProviderKey;
+  label: string;
+  imap_host: string;
+  imap_port: number;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_starttls: boolean;
+}
+
+export interface MailboxSummary {
+  id: string;
+  provider: MailProviderKey;
+  email_address: string;
+  note: string | null;
+  imap_host: string;
+  imap_port: number;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_starttls: boolean;
+  status: MailboxStatus;
+  last_error: string | null;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateMailboxRequest {
+  provider: MailProviderKey;
+  email_address: string;
+  auth_secret: string;
+  note: string | null;
+}
+
+export interface UpdateMailboxRequest {
+  note: string | null;
+  auth_secret?: string | null;
+}
+
+export interface MailboxSyncResponse {
+  mailbox: MailboxSummary;
+  inbox_count: number;
+  sent_count: number;
+}
+
+export interface MailMessageSummary {
+  id: string;
+  mailbox_id: string;
+  folder: MailFolder;
+  remote_uid: string;
+  message_id: string | null;
+  subject: string;
+  from_name: string | null;
+  from_address: string | null;
+  to_summary: string | null;
+  snippet: string | null;
+  is_read: boolean;
+  sent_at: string | null;
+  received_at: string | null;
+  synced_at: string;
+}
+
+export interface MailMessageDetail extends MailMessageSummary {
+  body_text: string | null;
+}
+
+export interface SendMailRequest {
+  mailbox_id: string;
+  to: string[];
+  subject: string;
+  body: string;
+}
+
+export interface SendMailResponse {
+  mailbox: MailboxSummary;
+  accepted: string[];
+  message: string;
+}
+
+export interface LeadRecipientSummary {
+  id: string;
+  email: string;
+  lead_name: string;
+  campaign_id: string;
+  campaign_name: string;
+  source: string;
+  company: string | null;
+}

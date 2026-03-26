@@ -1,4 +1,4 @@
-import { mount } from "@vue/test-utils";
+﻿import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 
 import ConsoleShell from "@/components/layout/ConsoleShell.vue";
@@ -11,6 +11,7 @@ describe("ConsoleShell", () => {
         navItems: [
           { value: "overview", label: "Overview" },
           { value: "campaigns", label: "Campaigns" },
+          { value: "mail", label: "Mail" },
           { value: "jobs", label: "Jobs" },
           { value: "system", label: "System" },
         ],
@@ -28,6 +29,7 @@ describe("ConsoleShell", () => {
     expect(wrapper.find('[aria-label="Primary"]').exists()).toBe(true);
     expect(wrapper.text()).toContain("Overview");
     expect(wrapper.text()).toContain("Campaigns");
+    expect(wrapper.text()).toContain("Mail");
     expect(wrapper.text()).toContain("Jobs");
     expect(wrapper.text()).toContain("System");
   });

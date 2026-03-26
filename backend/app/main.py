@@ -11,6 +11,8 @@ from app.core.config import Settings, get_settings
 from app.core.database import Database
 from app.core.job_manager import ScrapeJobManager
 from app.services.intelligence.scoring import LeadIntelligenceScorer
+from app.services.mail.crypto import MailSecretCipher
+from app.services.mail.service import MailService
 from app.services.scraping.linkedin_session import LinkedInSessionService
 from app.services.scraping.service import ScrapeService
 
@@ -20,6 +22,8 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     database = Database(settings.resolved_database_path)
     database.initialize()
+    mail_cipher = MailSecretCipher(settings.resolved_mail_secret_key_path)
+    mail_service = MailService(database=database, cipher=mail_cipher)
     linkedin_session_service = LinkedInSessionService(settings=settings, database=database)
     scrape_service = ScrapeService(
         settings=settings,
@@ -37,6 +41,7 @@ async def lifespan(app: FastAPI):
     app.state.job_manager = job_manager
     app.state.intelligence_scorer = intelligence_scorer
     app.state.linkedin_session_service = linkedin_session_service
+    app.state.mail_service = mail_service
 
     yield
 

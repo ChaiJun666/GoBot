@@ -74,6 +74,49 @@ class Database:
                     last_error TEXT,
                     updated_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS mailboxes (
+                    id TEXT PRIMARY KEY,
+                    provider TEXT NOT NULL,
+                    email_address TEXT NOT NULL UNIQUE,
+                    note TEXT,
+                    imap_host TEXT NOT NULL,
+                    imap_port INTEGER NOT NULL,
+                    smtp_host TEXT NOT NULL,
+                    smtp_port INTEGER NOT NULL,
+                    smtp_starttls INTEGER NOT NULL DEFAULT 0,
+                    encrypted_auth_secret TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'ready',
+                    last_error TEXT,
+                    last_synced_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_mailboxes_created_at
+                ON mailboxes(created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS mail_messages (
+                    id TEXT PRIMARY KEY,
+                    mailbox_id TEXT NOT NULL,
+                    folder TEXT NOT NULL,
+                    remote_uid TEXT NOT NULL,
+                    message_id_header TEXT,
+                    subject TEXT NOT NULL,
+                    from_name TEXT,
+                    from_address TEXT,
+                    to_summary TEXT,
+                    snippet TEXT,
+                    body_text TEXT,
+                    is_read INTEGER NOT NULL DEFAULT 0,
+                    sent_at TEXT,
+                    received_at TEXT,
+                    synced_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(mailbox_id, folder, remote_uid)
+                );
+                CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox_folder_received
+                ON mail_messages(mailbox_id, folder, received_at DESC, sent_at DESC, created_at DESC);
                 """
             )
             self._ensure_column(connection, "scrape_jobs", "campaign_id", "TEXT")
@@ -414,6 +457,229 @@ class Database:
         with self._lock, self._connect() as connection:
             connection.execute("DELETE FROM source_sessions WHERE source = ?", (source,))
 
+    def create_mailbox(
+        self,
+        *,
+        mailbox_id: str,
+        provider: str,
+        email_address: str,
+        note: str | None,
+        imap_host: str,
+        imap_port: int,
+        smtp_host: str,
+        smtp_port: int,
+        smtp_starttls: bool,
+        encrypted_auth_secret: str,
+    ) -> None:
+        now = utc_now_iso()
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO mailboxes (
+                    id, provider, email_address, note, imap_host, imap_port, smtp_host, smtp_port,
+                    smtp_starttls, encrypted_auth_secret, status, last_error, last_synced_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    mailbox_id,
+                    provider,
+                    email_address,
+                    note,
+                    imap_host,
+                    imap_port,
+                    smtp_host,
+                    smtp_port,
+                    1 if smtp_starttls else 0,
+                    encrypted_auth_secret,
+                    "ready",
+                    None,
+                    None,
+                    now,
+                    now,
+                ),
+            )
+
+    def update_mailbox(
+        self,
+        mailbox_id: str,
+        *,
+        note: str | None,
+        encrypted_auth_secret: str | None = None,
+    ) -> None:
+        fields: dict[str, Any] = {
+            "note": note,
+            "updated_at": utc_now_iso(),
+        }
+        if encrypted_auth_secret is not None:
+            fields["encrypted_auth_secret"] = encrypted_auth_secret
+        self._update_record("mailboxes", "id", mailbox_id, **fields)
+
+    def mark_mailbox_ready(self, mailbox_id: str) -> None:
+        now = utc_now_iso()
+        self._update_record(
+            "mailboxes",
+            "id",
+            mailbox_id,
+            status="ready",
+            last_error=None,
+            last_synced_at=now,
+            updated_at=now,
+        )
+
+    def mark_mailbox_error(self, mailbox_id: str, error_message: str) -> None:
+        self._update_record(
+            "mailboxes",
+            "id",
+            mailbox_id,
+            status="error",
+            last_error=error_message,
+            updated_at=utc_now_iso(),
+        )
+
+    def list_mailboxes(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, provider, email_address, note, imap_host, imap_port, smtp_host, smtp_port,
+                       smtp_starttls, encrypted_auth_secret, status, last_error, last_synced_at, created_at, updated_at
+                FROM mailboxes
+                ORDER BY datetime(created_at) DESC
+                """
+            ).fetchall()
+        return [self._row_to_mailbox_record(row) for row in rows]
+
+    def get_mailbox(self, mailbox_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, provider, email_address, note, imap_host, imap_port, smtp_host, smtp_port,
+                       smtp_starttls, encrypted_auth_secret, status, last_error, last_synced_at, created_at, updated_at
+                FROM mailboxes
+                WHERE id = ?
+                """,
+                (mailbox_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_mailbox_record(row)
+
+    def upsert_mail_message(
+        self,
+        *,
+        message_id: str,
+        mailbox_id: str,
+        folder: str,
+        remote_uid: str,
+        message_id_header: str | None,
+        subject: str,
+        from_name: str | None,
+        from_address: str | None,
+        to_summary: str | None,
+        snippet: str | None,
+        body_text: str | None,
+        is_read: bool,
+        sent_at: str | None,
+        received_at: str | None,
+    ) -> None:
+        now = utc_now_iso()
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO mail_messages (
+                    id, mailbox_id, folder, remote_uid, message_id_header, subject, from_name, from_address,
+                    to_summary, snippet, body_text, is_read, sent_at, received_at, synced_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(mailbox_id, folder, remote_uid) DO UPDATE SET
+                    message_id_header = excluded.message_id_header,
+                    subject = excluded.subject,
+                    from_name = excluded.from_name,
+                    from_address = excluded.from_address,
+                    to_summary = excluded.to_summary,
+                    snippet = excluded.snippet,
+                    body_text = excluded.body_text,
+                    is_read = excluded.is_read,
+                    sent_at = excluded.sent_at,
+                    received_at = excluded.received_at,
+                    synced_at = excluded.synced_at,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    message_id,
+                    mailbox_id,
+                    folder,
+                    remote_uid,
+                    message_id_header,
+                    subject,
+                    from_name,
+                    from_address,
+                    to_summary,
+                    snippet,
+                    body_text,
+                    1 if is_read else 0,
+                    sent_at,
+                    received_at,
+                    now,
+                    now,
+                    now,
+                ),
+            )
+
+    def list_mail_messages(self, *, mailbox_id: str, folder: str, limit: int) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, mailbox_id, folder, remote_uid, message_id_header, subject, from_name, from_address,
+                       to_summary, snippet, body_text, is_read, sent_at, received_at, synced_at, created_at, updated_at
+                FROM mail_messages
+                WHERE mailbox_id = ? AND folder = ?
+                ORDER BY COALESCE(datetime(received_at), datetime(sent_at), datetime(created_at)) DESC
+                LIMIT ?
+                """,
+                (mailbox_id, folder, limit),
+            ).fetchall()
+        return [self._row_to_mail_message_record(row) for row in rows]
+
+    def get_mail_message(self, message_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, mailbox_id, folder, remote_uid, message_id_header, subject, from_name, from_address,
+                       to_summary, snippet, body_text, is_read, sent_at, received_at, synced_at, created_at, updated_at
+                FROM mail_messages
+                WHERE id = ?
+                """,
+                (message_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_mail_message_record(row)
+
+    def list_lead_recipients(self, *, limit: int) -> list[dict[str, Any]]:
+        recipients: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for campaign in self.list_campaigns(limit=200):
+            for lead in campaign["results"]:
+                if not lead.email:
+                    continue
+                normalized = lead.email.casefold()
+                if normalized in seen:
+                    continue
+                seen.add(normalized)
+                recipients.append(
+                    {
+                        "id": f'{campaign["id"]}:{lead.email}',
+                        "email": lead.email,
+                        "lead_name": lead.name,
+                        "campaign_id": campaign["id"],
+                        "campaign_name": campaign["name"],
+                        "source": lead.source,
+                        "company": lead.current_company or None,
+                    }
+                )
+                if len(recipients) >= limit:
+                    return recipients
+        return recipients
+
     def _update_record(self, table: str, key_column: str, key_value: str, **fields: Any) -> None:
         assignments = ", ".join(f"{column} = ?" for column in fields)
         values = list(fields.values())
@@ -453,4 +719,15 @@ class Database:
             EnrichedLead.model_validate(item)
             for item in json.loads(record.pop("results_json"))
         ]
+        return record
+
+    def _row_to_mailbox_record(self, row: sqlite3.Row) -> dict[str, Any]:
+        record = dict(row)
+        record["smtp_starttls"] = bool(record["smtp_starttls"])
+        return record
+
+    def _row_to_mail_message_record(self, row: sqlite3.Row) -> dict[str, Any]:
+        record = dict(row)
+        record["message_id"] = record.pop("message_id_header")
+        record["is_read"] = bool(record["is_read"])
         return record
