@@ -252,3 +252,60 @@ export interface LeadRecipientSummary {
   source: string;
   company: string | null;
 }
+
+// ── LLM Config ────────────────────────────────────────────────────────
+
+export type LlmProviderKey = "openai" | "xai" | "anthropic" | "deepseek" | "qwen" | "zhipu" | "minimax";
+
+export interface LlmProviderPreset {
+  key: LlmProviderKey;
+  display_name: string;
+  default_base_url: string;
+  official_url: string;
+}
+
+export interface LlmConfigSummary {
+  id: string;
+  provider: string;
+  display_name: string;
+  model_name: string;
+  base_url: string;
+  official_url: string | null;
+  note: string | null;
+  has_api_key: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateLlmConfigRequest {
+  provider: LlmProviderKey;
+  display_name: string;
+  model_name: string;
+  base_url: string;
+  api_key: string;
+  note: string | null;
+  official_url: string | null;
+}
+
+export interface UpdateLlmConfigRequest {
+  display_name?: string | null;
+  model_name?: string | null;
+  base_url?: string | null;
+  api_key?: string | null;
+  note?: string | null;
+  official_url?: string | null;
+}
+
+export interface ActiveLlmConfig {
+  id: string;
+  provider: string;
+  display_name: string;
+  model_name: string;
+  base_url: string;
+  official_url: string | null;
+  note: string | null;
+  api_key: string;
+  created_at: string;
+  updated_at: string;
+}

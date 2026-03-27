@@ -8,6 +8,7 @@ import CampaignList from "@/components/CampaignList.vue";
 import InlineStatusNotice from "@/components/InlineStatusNotice.vue";
 import JobList from "@/components/JobList.vue";
 import ConsoleShell from "@/components/layout/ConsoleShell.vue";
+import LlmConfigWorkspace from "@/components/llm/LlmConfigWorkspace.vue";
 import MailWorkspace from "@/components/mail/MailWorkspace.vue";
 import OperationsCenter from "@/components/jobs/OperationsCenter.vue";
 import MetricCard from "@/components/MetricCard.vue";
@@ -22,6 +23,7 @@ import type {
   CampaignDetail,
   CampaignStatus,
   CampaignSummary,
+  CreateLlmConfigRequest,
   CreateMailboxRequest,
   ConnectLinkedInSessionRequest,
   CreateCampaignRequest,
@@ -29,6 +31,8 @@ import type {
   HealthResponse,
   LeadRecipientSummary,
   LinkedInSessionStatus,
+  LlmConfigSummary,
+  LlmProviderPreset,
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
@@ -39,6 +43,7 @@ import type {
   ScrapeJobSummary,
   ScrapeSource,
   SendMailRequest,
+  UpdateLlmConfigRequest,
   UpdateMailboxRequest,
 } from "@/types";
 
@@ -55,6 +60,11 @@ const currentMailFolder = ref<MailFolder>("inbox");
 const mailMessages = ref<MailMessageSummary[]>([]);
 const selectedMailMessage = ref<MailMessageDetail | null>(null);
 const leadRecipients = ref<LeadRecipientSummary[]>([]);
+const llmConfigs = ref<LlmConfigSummary[]>([]);
+const llmProviders = ref<LlmProviderPreset[]>([]);
+const selectedLlmConfigId = ref<string | null>(null);
+const loadingLlmConfigs = ref(false);
+const busyLlmConfig = ref(false);
 const loadingCampaigns = ref(false);
 const loadingCampaignDetail = ref(false);
 const loadingJobs = ref(false);
@@ -116,6 +126,7 @@ const navItems = computed(() => [
   { value: "overview" as ConsoleView, label: t("nav.overview"), hint: t("navHints.overview") },
   { value: "campaigns" as ConsoleView, label: t("nav.campaigns"), hint: t("navHints.campaigns") },
   { value: "mail" as ConsoleView, label: t("nav.mail"), hint: t("navHints.mail") },
+  { value: "llm" as ConsoleView, label: t("nav.llm"), hint: t("navHints.llm") },
   { value: "jobs" as ConsoleView, label: t("nav.jobs"), hint: t("navHints.jobs") },
   { value: "system" as ConsoleView, label: t("nav.system"), hint: t("navHints.system") },
 ]);
@@ -203,6 +214,9 @@ const headerMeta = computed(() => {
   }
   if (activeView.value === "mail") {
     return t("headerMeta.mail", { count: mailboxes.value.length });
+  }
+  if (activeView.value === "llm") {
+    return t("headerMeta.llm", { count: llmConfigs.value.length });
   }
   if (activeView.value === "system") {
     return t("headerMeta.system", {
@@ -687,6 +701,99 @@ async function retryJob(jobId: string) {
   }
 }
 
+async function refreshLlmProviders() {
+  try {
+    llmProviders.value = await api.getLlmProviders();
+  } catch (error) {
+    setMessage(error);
+  }
+}
+
+async function refreshLlmConfigs(options: { mode?: RefreshMode } = {}) {
+  const mode = options.mode ?? "visible";
+  if (mode === "visible") {
+    loadingLlmConfigs.value = true;
+  }
+
+  try {
+    llmConfigs.value = await api.listLlmConfigs();
+    if (!llmConfigs.value.length) {
+      selectedLlmConfigId.value = null;
+      return;
+    }
+    if (!selectedLlmConfigId.value || !llmConfigs.value.some((c) => c.id === selectedLlmConfigId.value)) {
+      selectedLlmConfigId.value = llmConfigs.value[0].id;
+    }
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    if (mode === "visible") {
+      loadingLlmConfigs.value = false;
+    }
+  }
+}
+
+async function createLlmConfig(payload: CreateLlmConfigRequest) {
+  busyLlmConfig.value = true;
+  try {
+    const created = await api.createLlmConfig(payload);
+    message.value = `${t("messages.llmConfigCreated")} "${created.display_name}"`;
+    messageTone.value = "success";
+    await refreshLlmConfigs();
+    selectedLlmConfigId.value = created.id;
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    busyLlmConfig.value = false;
+  }
+}
+
+async function updateLlmConfig(configId: string, payload: UpdateLlmConfigRequest) {
+  busyLlmConfig.value = true;
+  try {
+    const updated = await api.updateLlmConfig(configId, payload);
+    message.value = `${t("messages.llmConfigUpdated")} "${updated.display_name}"`;
+    messageTone.value = "success";
+    await refreshLlmConfigs();
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    busyLlmConfig.value = false;
+  }
+}
+
+async function deleteLlmConfig(configId: string) {
+  busyLlmConfig.value = true;
+  try {
+    await api.deleteLlmConfig(configId);
+    message.value = t("messages.llmConfigDeleted");
+    messageTone.value = "warning";
+    await refreshLlmConfigs();
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    busyLlmConfig.value = false;
+  }
+}
+
+async function activateLlmConfig(configId: string) {
+  busyLlmConfig.value = true;
+  try {
+    const activated = await api.activateLlmConfig(configId);
+    message.value = `${t("messages.llmConfigActivated")} "${activated.display_name}"`;
+    messageTone.value = "success";
+    await refreshLlmConfigs();
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    busyLlmConfig.value = false;
+  }
+}
+
+async function selectLlmConfig(configId: string) {
+  selectedLlmConfigId.value = configId;
+}
+
 async function bootstrap() {
   await Promise.all([
     refreshHealth(),
@@ -696,6 +803,8 @@ async function bootstrap() {
     refreshMailProviders(),
     refreshMailboxes(),
     refreshLeadRecipients(),
+    refreshLlmProviders(),
+    refreshLlmConfigs(),
   ]);
   if (selectedCampaignId.value) {
     await refreshSelectedCampaign();
@@ -726,6 +835,7 @@ onMounted(async () => {
         refreshCampaignWorkspace({ mode: "silent" }),
         refreshJobsWorkspace({ mode: "silent" }),
         refreshLinkedInSession({ mode: "silent" }),
+        refreshLlmConfigs({ mode: "silent" }),
       ]);
     } finally {
       pollInFlight = false;
@@ -952,6 +1062,21 @@ onUnmounted(() => {
           @sync-mailbox="syncMailbox"
           @send-mail="sendMail"
           @update-composer-open="mailComposerOpen = $event"
+        />
+      </section>
+
+      <section v-else-if="activeView === 'llm'" class="view-grid">
+        <LlmConfigWorkspace
+          :configs="llmConfigs"
+          :providers="llmProviders"
+          :selected-config-id="selectedLlmConfigId"
+          :loading-configs="loadingLlmConfigs"
+          :busy="busyLlmConfig"
+          @select-config="selectLlmConfig"
+          @create-config="createLlmConfig"
+          @update-config="updateLlmConfig"
+          @delete-config="deleteLlmConfig"
+          @activate-config="activateLlmConfig"
         />
       </section>
 

@@ -1,6 +1,8 @@
 import type {
+  ActiveLlmConfig,
   CampaignDetail,
   CampaignSummary,
+  CreateLlmConfigRequest,
   CreateMailboxRequest,
   ConnectLinkedInSessionRequest,
   CreateCampaignRequest,
@@ -10,6 +12,8 @@ import type {
   HealthResponse,
   LeadRecipientSummary,
   LinkedInSessionStatus,
+  LlmConfigSummary,
+  LlmProviderPreset,
   MailFolder,
   MailMessageDetail,
   MailMessageSummary,
@@ -20,6 +24,7 @@ import type {
   ScrapeJobSummary,
   SendMailRequest,
   SendMailResponse,
+  UpdateLlmConfigRequest,
   UpdateMailboxRequest,
 } from "@/types";
 
@@ -142,5 +147,37 @@ export const api = {
   },
   listLeadRecipients(limit = 200): Promise<LeadRecipientSummary[]> {
     return request<LeadRecipientSummary[]>(`/mail/lead-recipients?limit=${limit}`);
+  },
+  // ── LLM Config ────────────────────────────────────────────────────────
+  getLlmProviders(): Promise<LlmProviderPreset[]> {
+    return request<LlmProviderPreset[]>("/llm/providers");
+  },
+  listLlmConfigs(): Promise<LlmConfigSummary[]> {
+    return request<LlmConfigSummary[]>("/llm/configs");
+  },
+  createLlmConfig(payload: CreateLlmConfigRequest): Promise<LlmConfigSummary> {
+    return request<LlmConfigSummary>("/llm/configs", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  updateLlmConfig(configId: string, payload: UpdateLlmConfigRequest): Promise<LlmConfigSummary> {
+    return request<LlmConfigSummary>(`/llm/configs/${configId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteLlmConfig(configId: string): Promise<void> {
+    return request<void>(`/llm/configs/${configId}`, {
+      method: "DELETE",
+    });
+  },
+  activateLlmConfig(configId: string): Promise<LlmConfigSummary> {
+    return request<LlmConfigSummary>(`/llm/configs/${configId}/activate`, {
+      method: "POST",
+    });
+  },
+  getActiveLlmConfig(): Promise<ActiveLlmConfig | null> {
+    return request<ActiveLlmConfig | null>("/llm/configs/active");
   },
 };

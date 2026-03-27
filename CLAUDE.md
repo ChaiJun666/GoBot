@@ -47,6 +47,11 @@ Vue 3 SPA (port 5173)  --/api-->  FastAPI (port 8000)
           GoogleMaps   LinkedIn           DPAPI crypto
           (Scrapling)  (Scrapling +       (Win32 only)
                         Playwright)
+
+                    LlmConfigService
+                         |
+                    7 LLM providers
+                    (DPAPI crypto)
 ```
 
 **Data flow for a campaign:**
@@ -58,9 +63,11 @@ Vue 3 SPA (port 5173)  --/api-->  FastAPI (port 8000)
 6. `LeadIntelligenceScorer.score_leads()` applies 6 weighted factors
 7. `Database.complete_campaign()` stores enriched leads with summary metrics
 
-**Database:** Raw `sqlite3` — no ORM. Five tables: `scrape_jobs`, `campaigns`, `source_sessions`, `mailboxes`, `mail_messages`.
+**LLM config:** Manages multiple LLM provider configurations (OpenAI, xAI, Anthropic, DeepSeek, Qwen, Zhipu, MiniMax). Only one config can be active at a time. API keys are encrypted via DPAPI. `GET /api/v1/llm/configs/active` returns the active config with decrypted key for runtime use.
 
-**Frontend:** Single `App.vue` holds all state. No Vue Router — navigation via `useConsoleWorkspace()` composable. 5 workspace views: Overview, Campaigns, Mail, Jobs, System. Polls every 5s. Bilingual (en + zh-CN) via vue-i18n.
+**Database:** Raw `sqlite3` — no ORM. Six tables: `scrape_jobs`, `campaigns`, `source_sessions`, `mailboxes`, `mail_messages`, `llm_configs`.
+
+**Frontend:** Single `App.vue` holds all state. No Vue Router — navigation via `useConsoleWorkspace()` composable. 6 workspace views: Overview, Campaigns, Mail, LLM, Jobs, System. Polls every 5s. Bilingual (en + zh-CN) via vue-i18n.
 
 ## Key Backend Paths
 
@@ -68,9 +75,10 @@ Vue 3 SPA (port 5173)  --/api-->  FastAPI (port 8000)
 |--------|---------|
 | `app/main.py` | FastAPI app factory, lifespan, static serving |
 | `app/core/config.py` | Pydantic Settings (env vars, `.env` in repo root + backend/) |
+| `app/core/crypto.py` | Generic DPAPI `SecretCipher` (used by mail + LLM) |
 | `app/core/database.py` | SQLite persistence (all DDL + CRUD) |
 | `app/core/job_manager.py` | Async job lifecycle orchestration |
-| `app/api/routes/` | REST endpoints: campaigns, scrape_jobs, linkedin, mail, health |
+| `app/api/routes/` | REST endpoints: campaigns, scrape_jobs, linkedin, mail, llm, health |
 | `app/schemas/` | Pydantic models for all API contracts |
 | `app/services/scraping/service.py` | Scrape dispatcher to providers |
 | `app/services/scraping/providers/google_maps.py` | Google Maps scraping via Scrapling |
@@ -78,25 +86,26 @@ Vue 3 SPA (port 5173)  --/api-->  FastAPI (port 8000)
 | `app/services/scraping/linkedin_session.py` | Playwright-based LinkedIn login + cookie extraction |
 | `app/services/scraping/normalizers.py` | Lead deduplication and field normalization |
 | `app/services/intelligence/scoring.py` | Lead scoring engine (6 weighted factors) |
+| `app/services/llm/service.py` | LLM config CRUD + activation + DPAPI key encryption |
 | `app/services/mail/service.py` | IMAP sync, SMTP send |
-| `app/services/mail/crypto.py` | Windows DPAPI encryption for mail passwords |
 
 ## Key Frontend Paths
 
 | Module | Purpose |
 |--------|---------|
-| `src/App.vue` | Root component — all state, 5 views, polling |
+| `src/App.vue` | Root component — all state, 6 views, polling |
 | `src/types.ts` | TypeScript interfaces (mirrors backend schemas) |
 | `src/lib/api.ts` | Fetch-based API client for all endpoints |
 | `src/lib/i18n.ts` | vue-i18n setup, locale resolution, persistence |
 | `src/composables/useConsoleWorkspace.ts` | Navigation + selection state |
 | `src/components/campaigns/` | Campaign creation drawer, workbench, lead table |
+| `src/components/llm/LlmConfigWorkspace.vue` | LLM config list + form workspace |
 | `src/components/mail/MailWorkspace.vue` | Multi-account email workspace |
 | `src/components/system/LinkedInSessionCard.vue` | LinkedIn connection management |
 
 ## Platform Constraints
 
-- **Windows-only:** `app/services/mail/crypto.py` uses Windows DPAPI (`CryptProtectData`/`CryptUnprotectData`)
+- **Windows-only:** `app/core/crypto.py` uses Windows DPAPI (`CryptProtectData`/`CryptUnprotectData`)
 - **TLS:** `SCRAPER_VERIFY_TLS=false` is the practical default on some Windows setups where `curl_cffi` certificate validation fails
 - **No authentication** or multi-user isolation is implemented
 - **No ORM** — all database access uses raw `sqlite3` with manual SQL

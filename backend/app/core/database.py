@@ -117,6 +117,22 @@ class Database:
                 );
                 CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox_folder_received
                 ON mail_messages(mailbox_id, folder, received_at DESC, sent_at DESC, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS llm_configs (
+                    id TEXT PRIMARY KEY,
+                    provider TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    model_name TEXT NOT NULL,
+                    base_url TEXT NOT NULL,
+                    official_url TEXT,
+                    note TEXT,
+                    encrypted_api_key TEXT,
+                    is_active INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_configs_display_name
+                ON llm_configs(display_name);
                 """
             )
             self._ensure_column(connection, "scrape_jobs", "campaign_id", "TEXT")
@@ -679,6 +695,100 @@ class Database:
                 if len(recipients) >= limit:
                     return recipients
         return recipients
+
+    # ── LLM config CRUD ────────────────────────────────────────────────
+
+    def create_llm_config(
+        self,
+        *,
+        config_id: str,
+        provider: str,
+        display_name: str,
+        model_name: str,
+        base_url: str,
+        encrypted_api_key: str,
+        official_url: str | None,
+        note: str | None,
+    ) -> None:
+        now = utc_now_iso()
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO llm_configs (
+                    id, provider, display_name, model_name, base_url, official_url, note,
+                    encrypted_api_key, is_active, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                """,
+                (
+                    config_id, provider, display_name, model_name, base_url,
+                    official_url, note, encrypted_api_key, now, now,
+                ),
+            )
+
+    def list_llm_configs(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, provider, display_name, model_name, base_url, official_url, note,
+                       encrypted_api_key, is_active, created_at, updated_at
+                FROM llm_configs
+                ORDER BY datetime(created_at) DESC
+                """
+            ).fetchall()
+        return [self._row_to_llm_config_record(row) for row in rows]
+
+    def get_llm_config(self, config_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, provider, display_name, model_name, base_url, official_url, note,
+                       encrypted_api_key, is_active, created_at, updated_at
+                FROM llm_configs
+                WHERE id = ?
+                """,
+                (config_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_llm_config_record(row)
+
+    def update_llm_config(self, config_id: str, **fields: Any) -> None:
+        fields["updated_at"] = utc_now_iso()
+        self._update_record("llm_configs", "id", config_id, **fields)
+
+    def delete_llm_config(self, config_id: str) -> None:
+        with self._lock, self._connect() as connection:
+            connection.execute("DELETE FROM llm_configs WHERE id = ?", (config_id,))
+
+    def activate_llm_config(self, config_id: str) -> None:
+        now = utc_now_iso()
+        with self._lock, self._connect() as connection:
+            connection.execute("UPDATE llm_configs SET is_active = 0, updated_at = ?", (now,))
+            connection.execute(
+                "UPDATE llm_configs SET is_active = 1, updated_at = ? WHERE id = ?",
+                (now, config_id),
+            )
+
+    def get_active_llm_config(self) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, provider, display_name, model_name, base_url, official_url, note,
+                       encrypted_api_key, is_active, created_at, updated_at
+                FROM llm_configs
+                WHERE is_active = 1
+                LIMIT 1
+                """
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_llm_config_record(row)
+
+    def _row_to_llm_config_record(self, row: sqlite3.Row) -> dict[str, Any]:
+        record = dict(row)
+        record["is_active"] = bool(record["is_active"])
+        record["has_api_key"] = bool(record.get("encrypted_api_key"))
+        return record
 
     def _update_record(self, table: str, key_column: str, key_value: str, **fields: Any) -> None:
         assignments = ", ".join(f"{column} = ?" for column in fields)
