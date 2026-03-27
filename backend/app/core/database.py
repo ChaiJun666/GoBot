@@ -769,6 +769,14 @@ class Database:
                 (now, config_id),
             )
 
+    def deactivate_llm_config(self, config_id: str) -> None:
+        now = utc_now_iso()
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                "UPDATE llm_configs SET is_active = 0, updated_at = ? WHERE id = ?",
+                (now, config_id),
+            )
+
     def get_active_llm_config(self) -> dict[str, Any] | None:
         with self._connect() as connection:
             row = connection.execute(

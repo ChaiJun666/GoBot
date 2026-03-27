@@ -75,3 +75,13 @@ async def activate_config(config_id: str, request: Request) -> LlmConfigSummary:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@router.post("/configs/{config_id}/deactivate", response_model=LlmConfigSummary)
+async def deactivate_config(config_id: str, request: Request) -> LlmConfigSummary:
+    try:
+        return _get_service(request).deactivate_config(config_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))

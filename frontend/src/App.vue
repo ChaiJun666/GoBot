@@ -63,6 +63,7 @@ const leadRecipients = ref<LeadRecipientSummary[]>([]);
 const llmConfigs = ref<LlmConfigSummary[]>([]);
 const llmProviders = ref<LlmProviderPreset[]>([]);
 const selectedLlmConfigId = ref<string | null>(null);
+const llmConfigWorkspaceRef = ref<InstanceType<typeof LlmConfigWorkspace> | null>(null);
 const loadingLlmConfigs = ref(false);
 const busyLlmConfig = ref(false);
 const loadingCampaigns = ref(false);
@@ -741,6 +742,7 @@ async function createLlmConfig(payload: CreateLlmConfigRequest) {
     messageTone.value = "success";
     await refreshLlmConfigs();
     selectedLlmConfigId.value = created.id;
+    llmConfigWorkspaceRef.value?.cancelForm();
   } catch (error) {
     setMessage(error);
   } finally {
@@ -755,6 +757,7 @@ async function updateLlmConfig(configId: string, payload: UpdateLlmConfigRequest
     message.value = `${t("messages.llmConfigUpdated")} "${updated.display_name}"`;
     messageTone.value = "success";
     await refreshLlmConfigs();
+    llmConfigWorkspaceRef.value?.cancelForm();
   } catch (error) {
     setMessage(error);
   } finally {
@@ -782,6 +785,20 @@ async function activateLlmConfig(configId: string) {
     const activated = await api.activateLlmConfig(configId);
     message.value = `${t("messages.llmConfigActivated")} "${activated.display_name}"`;
     messageTone.value = "success";
+    await refreshLlmConfigs();
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    busyLlmConfig.value = false;
+  }
+}
+
+async function deactivateLlmConfig(configId: string) {
+  busyLlmConfig.value = true;
+  try {
+    const deactivated = await api.deactivateLlmConfig(configId);
+    message.value = `${t("messages.llmConfigDeactivated")} "${deactivated.display_name}"`;
+    messageTone.value = "info";
     await refreshLlmConfigs();
   } catch (error) {
     setMessage(error);
@@ -1067,6 +1084,7 @@ onUnmounted(() => {
 
       <section v-else-if="activeView === 'llm'" class="view-grid">
         <LlmConfigWorkspace
+          ref="llmConfigWorkspaceRef"
           :configs="llmConfigs"
           :providers="llmProviders"
           :selected-config-id="selectedLlmConfigId"
@@ -1077,6 +1095,7 @@ onUnmounted(() => {
           @update-config="updateLlmConfig"
           @delete-config="deleteLlmConfig"
           @activate-config="activateLlmConfig"
+          @deactivate-config="deactivateLlmConfig"
         />
       </section>
 

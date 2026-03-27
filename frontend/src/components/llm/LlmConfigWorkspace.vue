@@ -24,11 +24,13 @@ const emit = defineEmits<{
   updateConfig: [configId: string, payload: UpdateLlmConfigRequest];
   deleteConfig: [configId: string];
   activateConfig: [configId: string];
+  deactivateConfig: [configId: string];
   selectConfig: [configId: string];
 }>();
 
 const { t } = useI18n();
 
+const showForm = ref(false);
 const form = reactive({
   provider: "openai" as LlmProviderKey,
   display_name: "",
@@ -79,7 +81,7 @@ watch(
   },
 );
 
-function startCreate() {
+function resetForm() {
   editingId.value = null;
   showApiKey.value = false;
   form.provider = "openai";
@@ -89,6 +91,11 @@ function startCreate() {
   form.api_key = "";
   form.note = "";
   form.official_url = providerPreset.value?.official_url ?? "";
+}
+
+function startCreate() {
+  resetForm();
+  showForm.value = true;
 }
 
 function startEdit(config: LlmConfigSummary) {
@@ -101,6 +108,12 @@ function startEdit(config: LlmConfigSummary) {
   form.api_key = "";
   form.note = config.note ?? "";
   form.official_url = config.official_url ?? "";
+  showForm.value = true;
+}
+
+function cancelForm() {
+  showForm.value = false;
+  resetForm();
 }
 
 function submit() {
@@ -150,6 +163,8 @@ function formatDate(value: string | null): string {
     minute: "2-digit",
   }).format(new Date(value));
 }
+
+defineExpose({ startCreate, startEdit, cancelForm });
 </script>
 
 <template>
@@ -195,8 +210,8 @@ function formatDate(value: string | null): string {
         <span>{{ t("llm.noConfigsDescription") }}</span>
       </div>
 
-      <!-- Create / Edit form -->
-      <form class="composer-form" @submit.prevent="submit">
+      <!-- Create / Edit form (hidden by default) -->
+      <form v-if="showForm" class="composer-form" @submit.prevent="submit">
         <div class="panel-heading">
           <p class="panel-kicker">{{ t("llm.configFormKicker") }}</p>
           <h2>{{ formTitle }}</h2>
@@ -260,12 +275,11 @@ function formatDate(value: string | null): string {
             {{ submitLabel }}
           </button>
           <button
-            v-if="selectedConfig"
             class="ghost-button"
             type="button"
-            @click="startEdit(selectedConfig)"
+            @click="cancelForm"
           >
-            {{ t("llm.editConfig") }}
+            {{ t("actions.cancel") }}
           </button>
         </div>
       </form>
@@ -288,9 +302,21 @@ function formatDate(value: string | null): string {
             >
               {{ t("llm.activate") }}
             </button>
-            <span v-else class="status-badge" data-status="completed">
-              {{ t("common.enabled") }}
-            </span>
+            <button
+              v-else
+              class="ghost-button"
+              type="button"
+              @click="$emit('deactivateConfig', selectedConfig.id)"
+            >
+              {{ t("llm.deactivate") }}
+            </button>
+            <button
+              class="ghost-button"
+              type="button"
+              @click="startEdit(selectedConfig)"
+            >
+              {{ t("llm.editConfig") }}
+            </button>
             <button
               class="ghost-button danger-ghost"
               type="button"

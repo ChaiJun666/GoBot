@@ -30,6 +30,7 @@ export const enMessages = {
     retrying: "Retrying...",
     exportLeads: "Export leads",
     openSystem: "Open connections",
+    cancel: "Cancel",
   },
   messages: {
     campaignLaunchedPrefix: "Launched campaign",
@@ -46,6 +47,7 @@ export const enMessages = {
     llmConfigUpdated: "Updated LLM config",
     llmConfigDeleted: "LLM config deleted.",
     llmConfigActivated: "Activated LLM config",
+    llmConfigDeactivated: "Deactivated LLM config",
   },
   common: {
     loadingCampaign: "Loading campaign...",
@@ -378,6 +380,7 @@ export const enMessages = {
     saving: "Saving...",
     deleteConfig: "Delete",
     activate: "Activate",
+    deactivate: "Deactivate",
     confirmDelete: "Delete",
     deleteConfirmTitle: "Confirm deletion",
     deleteConfirmDescription: "This will permanently remove config \"{name}\". This action cannot be undone.",

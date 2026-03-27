@@ -177,6 +177,11 @@ export const api = {
       method: "POST",
     });
   },
+  deactivateLlmConfig(configId: string): Promise<LlmConfigSummary> {
+    return request<LlmConfigSummary>(`/llm/configs/${configId}/deactivate`, {
+      method: "POST",
+    });
+  },
   getActiveLlmConfig(): Promise<ActiveLlmConfig | null> {
     return request<ActiveLlmConfig | null>("/llm/configs/active");
   },

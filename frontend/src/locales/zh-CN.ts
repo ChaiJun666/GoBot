@@ -30,6 +30,7 @@ export const zhCnMessages = {
     retrying: "重试中...",
     exportLeads: "导出线索",
     openSystem: "打开连接",
+    cancel: "取消",
   },
   messages: {
     campaignLaunchedPrefix: "已启动活动",
@@ -46,6 +47,7 @@ export const zhCnMessages = {
     llmConfigUpdated: "已更新 LLM 配置",
     llmConfigDeleted: "LLM 配置已删除。",
     llmConfigActivated: "已启用 LLM 配置",
+    llmConfigDeactivated: "已停用 LLM 配置",
   },
   common: {
     loadingCampaign: "正在加载活动...",
@@ -370,6 +372,7 @@ export const zhCnMessages = {
     saving: "保存中...",
     deleteConfig: "删除",
     activate: "启用",
+    deactivate: "停用",
     confirmDelete: "确认删除",
     deleteConfirmTitle: "确认删除",
     deleteConfirmDescription: "将永久删除配置「{name}」，此操作不可撤销。",

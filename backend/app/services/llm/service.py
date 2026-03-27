@@ -106,6 +106,16 @@ class LlmConfigService:
             raise RuntimeError("Failed to retrieve activated LLM config")
         return LlmConfigSummary.from_record(record)
 
+    def deactivate_config(self, config_id: str) -> LlmConfigSummary:
+        existing = self._db.get_llm_config(config_id)
+        if existing is None:
+            raise LookupError(f"LLM config {config_id} not found")
+        self._db.deactivate_llm_config(config_id)
+        record = self._db.get_llm_config(config_id)
+        if record is None:
+            raise RuntimeError("Failed to retrieve deactivated LLM config")
+        return LlmConfigSummary.from_record(record)
+
     def get_active_config(self) -> ActiveLlmConfig | None:
         record = self._db.get_active_llm_config()
         if record is None:
