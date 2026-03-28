@@ -177,6 +177,32 @@ class Database:
                 );
                 CREATE INDEX IF NOT EXISTS idx_site_deployments_site
                 ON site_deployments(site_id, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS lead_email_stages (
+                    id TEXT PRIMARY KEY,
+                    lead_id TEXT NOT NULL UNIQUE,
+                    lead_email TEXT NOT NULL,
+                    lead_name TEXT NOT NULL,
+                    lead_company TEXT,
+                    lead_industry TEXT,
+                    lead_location TEXT,
+                    lead_source TEXT,
+                    lead_headline TEXT,
+                    campaign_id TEXT NOT NULL,
+                    current_stage INTEGER NOT NULL DEFAULT 1,
+                    emails_sent INTEGER NOT NULL DEFAULT 0,
+                    last_email_at TEXT,
+                    next_stage_at TEXT,
+                    language TEXT NOT NULL DEFAULT 'auto',
+                    manual_override INTEGER NOT NULL DEFAULT 0,
+                    notes TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_lead_email_stages_campaign
+                ON lead_email_stages(campaign_id, current_stage);
+                CREATE INDEX IF NOT EXISTS idx_lead_email_stages_email
+                ON lead_email_stages(lead_email);
                 """
             )
             self._ensure_column(connection, "scrape_jobs", "campaign_id", "TEXT")
@@ -979,6 +1005,115 @@ class Database:
 
     def update_deployment(self, deployment_id: str, **fields: Any) -> None:
         self._update_record("site_deployments", "id", deployment_id, **fields)
+
+    # -- Lead Email Stages CRUD --
+
+    def upsert_lead_stage(
+        self,
+        *,
+        record_id: str,
+        lead_id: str,
+        lead_email: str,
+        lead_name: str,
+        lead_company: str | None = None,
+        lead_industry: str | None = None,
+        lead_location: str | None = None,
+        lead_source: str | None = None,
+        lead_headline: str | None = None,
+        campaign_id: str = "",
+        current_stage: int = 1,
+        emails_sent: int = 0,
+        last_email_at: str | None = None,
+        next_stage_at: str | None = None,
+        language: str = "auto",
+        manual_override: bool = False,
+        notes: str | None = None,
+    ) -> None:
+        now = utc_now_iso()
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO lead_email_stages (
+                    id, lead_id, lead_email, lead_name, lead_company,
+                    lead_industry, lead_location, lead_source, lead_headline,
+                    campaign_id, current_stage, emails_sent,
+                    last_email_at, next_stage_at, language,
+                    manual_override, notes, created_at, updated_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?, ?, ?
+                )
+                ON CONFLICT(lead_id) DO UPDATE SET
+                    lead_email = excluded.lead_email,
+                    lead_name = excluded.lead_name,
+                    lead_company = COALESCE(excluded.lead_company, lead_email_stages.lead_company),
+                    lead_industry = COALESCE(excluded.lead_industry, lead_email_stages.lead_industry),
+                    lead_location = COALESCE(excluded.lead_location, lead_email_stages.lead_location),
+                    lead_source = COALESCE(excluded.lead_source, lead_email_stages.lead_source),
+                    lead_headline = COALESCE(excluded.lead_headline, lead_email_stages.lead_headline),
+                    campaign_id = excluded.campaign_id,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    record_id, lead_id, lead_email, lead_name, lead_company,
+                    lead_industry, lead_location, lead_source, lead_headline,
+                    campaign_id, current_stage, emails_sent,
+                    last_email_at, next_stage_at, language,
+                    int(manual_override), notes, now, now,
+                ),
+            )
+
+    def list_lead_stages(
+        self,
+        *,
+        campaign_id: str | None = None,
+        stage: int | None = None,
+    ) -> list[dict[str, Any]]:
+        conditions: list[str] = []
+        params: list[Any] = []
+        if campaign_id is not None:
+            conditions.append("campaign_id = ?")
+            params.append(campaign_id)
+        if stage is not None:
+            conditions.append("current_stage = ?")
+            params.append(stage)
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"SELECT * FROM lead_email_stages {where} ORDER BY datetime(updated_at) DESC",
+                params,
+            ).fetchall()
+        return [self._row_to_lead_stage_record(row) for row in rows]
+
+    def get_lead_stage(self, lead_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM lead_email_stages WHERE lead_id = ?", (lead_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_lead_stage_record(row)
+
+    def get_lead_stage_by_email(self, lead_email: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM lead_email_stages WHERE lead_email = ?", (lead_email,)
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_lead_stage_record(row)
+
+    def update_lead_stage(self, record_id: str, **fields: Any) -> None:
+        fields["updated_at"] = utc_now_iso()
+        self._update_record("lead_email_stages", "id", record_id, **fields)
+
+    def _row_to_lead_stage_record(self, row: sqlite3.Row) -> dict[str, Any]:
+        record = dict(row)
+        record["manual_override"] = bool(record["manual_override"])
+        return record
 
     def _update_record(self, table: str, key_column: str, key_value: str, **fields: Any) -> None:
         assignments = ", ".join(f"{column} = ?" for column in fields)

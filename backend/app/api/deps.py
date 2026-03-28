@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import Request
 
+from app.services.email_generator.service import EmailGeneratorService
 from app.core.database import Database
 from app.core.job_manager import ScrapeJobManager
 from app.services.llm.service import LlmConfigService
@@ -32,3 +33,7 @@ def get_mail_service(request: Request) -> MailService:
 
 def get_sites_service(request: Request) -> SitesService:
     return request.app.state.sites_service
+
+
+def get_email_generator_service(request: Request) -> EmailGeneratorService:
+    return request.app.state.email_generator_service

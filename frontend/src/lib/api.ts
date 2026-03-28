@@ -11,9 +11,11 @@ import type {
   CreateCampaignResponse,
   CreateScrapeJobRequest,
   CreateScrapeJobResponse,
-  CreateSiteRequest,
-  DeploySiteResponse,
+  GenerateEmailsRequest,
+  GenerateEmailsResponse,
   HealthResponse,
+  LeadEmailHistory,
+  LeadOutreachSummary,
   LeadRecipientSummary,
   LinkedInSessionStatus,
   LlmConfigSummary,
@@ -28,8 +30,11 @@ import type {
   ScrapeJobSummary,
   SendMailRequest,
   SendMailResponse,
+  SendOutreachEmailsRequest,
+  SendOutreachEmailsResponse,
   SiteDeployment,
   SiteSummary,
+  UpdateLeadStageRequest,
   UpdateLlmConfigRequest,
   UpdateMailboxRequest,
   UpdateSiteRequest,
@@ -221,5 +226,37 @@ export const api = {
   },
   listSiteDeployments(siteId: string): Promise<SiteDeployment[]> {
     return request<SiteDeployment[]>(`/sites/${siteId}/deployments`);
+  },
+  // ── Email Outreach ────────────────────────────────────────────────
+  listOutreachLeads(campaignId?: string | null, stage?: number | null): Promise<LeadOutreachSummary[]> {
+    const params = new URLSearchParams();
+    if (campaignId) params.set("campaign_id", campaignId);
+    if (stage != null) params.set("stage", String(stage));
+    const qs = params.toString();
+    return request<LeadOutreachSummary[]>(`/email-outreach/leads${qs ? `?${qs}` : ""}`);
+  },
+  updateLeadStage(leadId: string, payload: UpdateLeadStageRequest): Promise<LeadOutreachSummary> {
+    return request<LeadOutreachSummary>(`/email-outreach/leads/${leadId}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  generateEmails(payload: GenerateEmailsRequest): Promise<GenerateEmailsResponse> {
+    return request<GenerateEmailsResponse>("/email-outreach/generate", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  sendOutreachEmails(payload: SendOutreachEmailsRequest): Promise<SendOutreachEmailsResponse> {
+    return request<SendOutreachEmailsResponse>("/email-outreach/send", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  getLeadEmailHistory(leadId: string): Promise<LeadEmailHistory> {
+    return request<LeadEmailHistory>(`/email-outreach/history/${leadId}`);
+  },
+  initCampaignLeadStages(campaignId: string): Promise<{ campaign_id: string; leads_initialized: number }> {
+    return request(`/email-outreach/campaigns/${campaignId}/init-stages`, { method: "POST" });
   },
 };

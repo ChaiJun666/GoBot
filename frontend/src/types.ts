@@ -400,3 +400,80 @@ export interface DeploySiteResponse {
   site: SiteSummary;
   deployment: SiteDeployment;
 }
+
+// ── Email Outreach ──────────────────────────────────────────────────
+
+export type OutreachLanguage = "auto" | "en" | "zh";
+
+export interface LeadOutreachSummary {
+  id: string;
+  lead_id: string;
+  lead_email: string;
+  lead_name: string;
+  lead_company: string | null;
+  lead_industry: string | null;
+  lead_location: string | null;
+  lead_source: string | null;
+  lead_headline: string | null;
+  campaign_id: string;
+  campaign_name: string | null;
+  current_stage: number;
+  emails_sent: number;
+  last_email_at: string | null;
+  next_stage_at: string | null;
+  language: OutreachLanguage;
+  manual_override: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpdateLeadStageRequest {
+  stage: number;
+  manual_override: boolean;
+}
+
+export interface GenerateEmailsRequest {
+  lead_ids: string[];
+  stage?: number | null;
+  language?: OutreachLanguage | null;
+  user_instructions?: string | null;
+}
+
+export interface GeneratedEmail {
+  lead_id: string;
+  subject: string;
+  body: string;
+}
+
+export interface GenerateEmailsResponse {
+  emails: GeneratedEmail[];
+  errors: { lead_id: string; error: string }[];
+}
+
+export interface OutreachSendEmailItem {
+  lead_id: string;
+  mailbox_id: string;
+  subject: string;
+  body: string;
+}
+
+export interface SendOutreachEmailsRequest {
+  emails: OutreachSendEmailItem[];
+}
+
+export interface SendOutreachEmailResult {
+  lead_id: string;
+  status: "sent" | "error";
+  error: string | null;
+}
+
+export interface SendOutreachEmailsResponse {
+  results: SendOutreachEmailResult[];
+}
+
+export interface LeadEmailHistory {
+  lead_id: string;
+  lead_name: string;
+  messages: MailMessageSummary[];
+}

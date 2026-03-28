@@ -12,6 +12,7 @@ import LlmConfigWorkspace from "@/components/llm/LlmConfigWorkspace.vue";
 import MailWorkspace from "@/components/mail/MailWorkspace.vue";
 import OperationsCenter from "@/components/jobs/OperationsCenter.vue";
 import SitesWorkspace from "@/components/sites/SitesWorkspace.vue";
+import EmailOutreachPanel from "@/components/mail/EmailOutreachPanel.vue";
 import MetricCard from "@/components/MetricCard.vue";
 import ResultTable from "@/components/ResultTable.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
@@ -32,6 +33,7 @@ import type {
   EnrichedLead,
   HealthResponse,
   LeadRecipientSummary,
+  LeadOutreachSummary,
   LinkedInSessionStatus,
   LlmConfigSummary,
   LlmProviderPreset,
@@ -73,6 +75,9 @@ const sites = ref<SiteSummary[]>([]);
 const selectedSiteId = ref<string | null>(null);
 const loadingSites = ref(false);
 const busySite = ref(false);
+const outreachLeads = ref<LeadOutreachSummary[]>([]);
+const loadingOutreachLeads = ref(false);
+const busyOutreach = ref(false);
 const loadingLlmConfigs = ref(false);
 const busyLlmConfig = ref(false);
 const loadingCampaigns = ref(false);
@@ -90,6 +95,7 @@ const sendingMail = ref(false);
 const syncingMailboxId = ref<string | null>(null);
 const campaignDrawerOpen = ref(false);
 const mailComposerOpen = ref(false);
+const mailTab = ref<"mailbox" | "outreach">("mailbox");
 const message = ref<string | null>(null);
 const messageTone = ref<"info" | "success" | "warning" | "danger">("info");
 const campaignFilterQuery = ref("");
@@ -260,6 +266,8 @@ const activityLabel = computed(() => {
 const headerActionLabel = computed(() =>
   activeView.value === "mail" ? t("mail.compose") : t("actions.newCampaign"),
 );
+
+const hasActiveLlm = computed(() => llmConfigs.value.some((c) => c.is_active));
 
 async function refreshHealth() {
   try {
@@ -909,6 +917,27 @@ async function selectSite(siteId: string) {
   selectedSiteId.value = siteId;
 }
 
+async function refreshOutreachLeads(options: { mode?: RefreshMode } = {}) {
+  const mode = options.mode ?? "visible";
+  if (mode === "visible") {
+    loadingOutreachLeads.value = true;
+  }
+  try {
+    outreachLeads.value = await api.listOutreachLeads();
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    if (mode === "visible") {
+      loadingOutreachLeads.value = false;
+    }
+  }
+}
+
+function handleOutreachMessage(text: string, tone: "info" | "success" | "warning" | "danger") {
+  message.value = text;
+  messageTone.value = tone;
+}
+
 async function bootstrap() {
   await Promise.all([
     refreshHealth(),
@@ -921,6 +950,7 @@ async function bootstrap() {
     refreshLlmProviders(),
     refreshLlmConfigs(),
     refreshSites(),
+    refreshOutreachLeads(),
   ]);
   if (selectedCampaignId.value) {
     await refreshSelectedCampaign();
@@ -1156,6 +1186,13 @@ onUnmounted(() => {
       </section>
 
       <section v-else-if="activeView === 'mail'" class="view-grid">
+        <div class="mail-folder-tabs" style="margin-bottom:0.5rem">
+          <button class="mail-folder-tab" :class="{ active: mailTab === 'mailbox' }" type="button"
+            @click="mailTab = 'mailbox'">{{ t("mail.inbox") }}</button>
+          <button class="mail-folder-tab" :class="{ active: mailTab === 'outreach' }" type="button"
+            @click="mailTab = 'outreach'">{{ t("outreach.tabLabel") }}</button>
+        </div>
+        <template v-if="mailTab === 'mailbox'">
         <MailWorkspace
           :mailboxes="mailboxes"
           :providers="mailProviders"
@@ -1179,6 +1216,17 @@ onUnmounted(() => {
           @sync-mailbox="syncMailbox"
           @send-mail="sendMail"
           @update-composer-open="mailComposerOpen = $event"
+        />
+        </template>
+        <EmailOutreachPanel
+          v-else
+          :leads="outreachLeads"
+          :mailboxes="mailboxes"
+          :loading-leads="loadingOutreachLeads"
+          :busy="busyOutreach"
+          :has-active-llm="hasActiveLlm"
+          @refresh-leads="refreshOutreachLeads"
+          @message="handleOutreachMessage"
         />
       </section>
 

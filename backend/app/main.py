@@ -14,6 +14,7 @@ from app.core.job_manager import ScrapeJobManager
 from app.services.intelligence.scoring import LeadIntelligenceScorer
 from app.services.llm.service import LlmConfigService
 from app.services.mail.service import MailService
+from app.services.email_generator.service import EmailGeneratorService
 from app.services.scraping.linkedin_session import LinkedInSessionService
 from app.services.scraping.service import ScrapeService
 from app.services.sites.service import SitesService
@@ -41,6 +42,11 @@ async def lifespan(app: FastAPI):
         scrape_service=scrape_service,
         intelligence_scorer=intelligence_scorer,
     )
+    email_generator_service = EmailGeneratorService(
+        database=database,
+        llm_config_service=llm_config_service,
+        mail_service=mail_service,
+    )
 
     app.state.settings = settings
     app.state.database = database
@@ -50,6 +56,7 @@ async def lifespan(app: FastAPI):
     app.state.linkedin_session_service = linkedin_session_service
     app.state.mail_service = mail_service
     app.state.sites_service = sites_service
+    app.state.email_generator_service = email_generator_service
 
     yield
 
