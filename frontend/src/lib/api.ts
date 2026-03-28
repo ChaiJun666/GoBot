@@ -5,10 +5,14 @@ import type {
   CreateLlmConfigRequest,
   CreateMailboxRequest,
   ConnectLinkedInSessionRequest,
+  CreateSiteRequest,
+  DeploySiteResponse,
   CreateCampaignRequest,
   CreateCampaignResponse,
   CreateScrapeJobRequest,
   CreateScrapeJobResponse,
+  CreateSiteRequest,
+  DeploySiteResponse,
   HealthResponse,
   LeadRecipientSummary,
   LinkedInSessionStatus,
@@ -24,8 +28,11 @@ import type {
   ScrapeJobSummary,
   SendMailRequest,
   SendMailResponse,
+  SiteDeployment,
+  SiteSummary,
   UpdateLlmConfigRequest,
   UpdateMailboxRequest,
+  UpdateSiteRequest,
 } from "@/types";
 
 const API_ROOT = "/api/v1";
@@ -184,5 +191,35 @@ export const api = {
   },
   getActiveLlmConfig(): Promise<ActiveLlmConfig | null> {
     return request<ActiveLlmConfig | null>("/llm/configs/active");
+  },
+  // ── Sites ────────────────────────────────────────────────────────────
+  listSites(): Promise<SiteSummary[]> {
+    return request<SiteSummary[]>("/sites");
+  },
+  createSite(payload: CreateSiteRequest): Promise<SiteSummary> {
+    return request<SiteSummary>("/sites", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  getSite(siteId: string): Promise<SiteSummary> {
+    return request<SiteSummary>(`/sites/${siteId}`);
+  },
+  updateSite(siteId: string, payload: UpdateSiteRequest): Promise<SiteSummary> {
+    return request<SiteSummary>(`/sites/${siteId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+  deleteSite(siteId: string): Promise<void> {
+    return request<void>(`/sites/${siteId}`, { method: "DELETE" });
+  },
+  deploySite(siteId: string): Promise<DeploySiteResponse> {
+    return request<DeploySiteResponse>(`/sites/${siteId}/deploy`, {
+      method: "POST",
+    });
+  },
+  listSiteDeployments(siteId: string): Promise<SiteDeployment[]> {
+    return request<SiteDeployment[]>(`/sites/${siteId}/deployments`);
   },
 };

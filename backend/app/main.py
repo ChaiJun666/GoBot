@@ -16,6 +16,7 @@ from app.services.llm.service import LlmConfigService
 from app.services.mail.service import MailService
 from app.services.scraping.linkedin_session import LinkedInSessionService
 from app.services.scraping.service import ScrapeService
+from app.services.sites.service import SitesService
 
 
 @asynccontextmanager
@@ -27,6 +28,8 @@ async def lifespan(app: FastAPI):
     mail_service = MailService(database=database, cipher=mail_cipher)
     llm_cipher = SecretCipher(purpose="GoBot LLM config")
     llm_config_service = LlmConfigService(database=database, cipher=llm_cipher)
+    site_cipher = SecretCipher(purpose="GoBot site secret")
+    sites_service = SitesService(database=database, cipher=site_cipher)
     linkedin_session_service = LinkedInSessionService(settings=settings, database=database)
     scrape_service = ScrapeService(
         settings=settings,
@@ -46,10 +49,12 @@ async def lifespan(app: FastAPI):
     app.state.llm_config_service = llm_config_service
     app.state.linkedin_session_service = linkedin_session_service
     app.state.mail_service = mail_service
+    app.state.sites_service = sites_service
 
     yield
 
     await job_manager.shutdown()
+    await sites_service.shutdown()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

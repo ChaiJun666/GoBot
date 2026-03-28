@@ -309,3 +309,94 @@ export interface ActiveLlmConfig {
   created_at: string;
   updated_at: string;
 }
+
+// ── Sites ────────────────────────────────────────────────────────────
+
+export type SiteStatus = "draft" | "deploying" | "running" | "stopped" | "error";
+export type SslMode = "none" | "letsencrypt" | "cloudflare";
+
+export interface SiteSummary {
+  id: string;
+  display_name: string;
+  slug: string;
+  domain: string;
+  server_ip: string;
+  ssh_user: string;
+  has_ssh_password: boolean;
+  wp_admin_user: string;
+  has_wp_admin_password: boolean;
+  wp_admin_email: string;
+  mysql_database: string;
+  mysql_user: string;
+  has_mysql_password: boolean;
+  ssl_mode: SslMode;
+  cloudflare_zone_id: string | null;
+  has_cloudflare_api_token: boolean;
+  cloudflare_dns_proxy: boolean;
+  wp_plugins: string[];
+  status: SiteStatus;
+  deploy_log: string | null;
+  site_url: string | null;
+  wp_admin_url: string | null;
+  deployed_at: string | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateSiteRequest {
+  display_name: string;
+  domain: string;
+  server_ip: string;
+  ssh_user: string;
+  ssh_password: string;
+  wp_admin_email: string;
+  mysql_root_password: string;
+  slug?: string | null;
+  wp_admin_user?: string | null;
+  wp_admin_password?: string | null;
+  mysql_database?: string | null;
+  mysql_user?: string | null;
+  mysql_password?: string | null;
+  ssl_mode?: SslMode | null;
+  cloudflare_zone_id?: string | null;
+  cloudflare_api_token?: string | null;
+  cloudflare_dns_proxy?: boolean | null;
+  wp_plugins?: string[] | null;
+  note?: string | null;
+}
+
+export interface UpdateSiteRequest {
+  display_name?: string | null;
+  domain?: string | null;
+  server_ip?: string | null;
+  ssh_user?: string | null;
+  ssh_password?: string | null;
+  wp_admin_user?: string | null;
+  wp_admin_password?: string | null;
+  wp_admin_email?: string | null;
+  mysql_root_password?: string | null;
+  mysql_database?: string | null;
+  mysql_user?: string | null;
+  mysql_password?: string | null;
+  ssl_mode?: SslMode | null;
+  cloudflare_zone_id?: string | null;
+  cloudflare_api_token?: string | null;
+  cloudflare_dns_proxy?: boolean | null;
+  wp_plugins?: string[] | null;
+  note?: string | null;
+}
+
+export interface SiteDeployment {
+  id: string;
+  site_id: string;
+  status: "pending" | "running" | "completed" | "failed";
+  log: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface DeploySiteResponse {
+  site: SiteSummary;
+  deployment: SiteDeployment;
+}

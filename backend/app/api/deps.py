@@ -7,6 +7,7 @@ from app.core.job_manager import ScrapeJobManager
 from app.services.llm.service import LlmConfigService
 from app.services.mail.service import MailService
 from app.services.scraping.linkedin_session import LinkedInSessionService
+from app.services.sites.service import SitesService
 
 
 def get_database(request: Request) -> Database:
@@ -27,3 +28,7 @@ def get_llm_config_service(request: Request) -> LlmConfigService:
 
 def get_mail_service(request: Request) -> MailService:
     return request.app.state.mail_service
+
+
+def get_sites_service(request: Request) -> SitesService:
+    return request.app.state.sites_service

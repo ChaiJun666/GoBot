@@ -11,6 +11,7 @@ import ConsoleShell from "@/components/layout/ConsoleShell.vue";
 import LlmConfigWorkspace from "@/components/llm/LlmConfigWorkspace.vue";
 import MailWorkspace from "@/components/mail/MailWorkspace.vue";
 import OperationsCenter from "@/components/jobs/OperationsCenter.vue";
+import SitesWorkspace from "@/components/sites/SitesWorkspace.vue";
 import MetricCard from "@/components/MetricCard.vue";
 import ResultTable from "@/components/ResultTable.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
@@ -27,6 +28,7 @@ import type {
   CreateMailboxRequest,
   ConnectLinkedInSessionRequest,
   CreateCampaignRequest,
+  CreateSiteRequest,
   EnrichedLead,
   HealthResponse,
   LeadRecipientSummary,
@@ -43,8 +45,11 @@ import type {
   ScrapeJobSummary,
   ScrapeSource,
   SendMailRequest,
+  SiteDeployment,
+  SiteSummary,
   UpdateLlmConfigRequest,
   UpdateMailboxRequest,
+  UpdateSiteRequest,
 } from "@/types";
 
 const campaigns = ref<CampaignSummary[]>([]);
@@ -64,6 +69,10 @@ const llmConfigs = ref<LlmConfigSummary[]>([]);
 const llmProviders = ref<LlmProviderPreset[]>([]);
 const selectedLlmConfigId = ref<string | null>(null);
 const llmConfigWorkspaceRef = ref<InstanceType<typeof LlmConfigWorkspace> | null>(null);
+const sites = ref<SiteSummary[]>([]);
+const selectedSiteId = ref<string | null>(null);
+const loadingSites = ref(false);
+const busySite = ref(false);
 const loadingLlmConfigs = ref(false);
 const busyLlmConfig = ref(false);
 const loadingCampaigns = ref(false);
@@ -127,6 +136,7 @@ const navItems = computed(() => [
   { value: "overview" as ConsoleView, label: t("nav.overview"), hint: t("navHints.overview") },
   { value: "campaigns" as ConsoleView, label: t("nav.campaigns"), hint: t("navHints.campaigns") },
   { value: "mail" as ConsoleView, label: t("nav.mail"), hint: t("navHints.mail") },
+  { value: "sites" as ConsoleView, label: t("nav.sites"), hint: t("navHints.sites") },
   { value: "llm" as ConsoleView, label: t("nav.llm"), hint: t("navHints.llm") },
   { value: "jobs" as ConsoleView, label: t("nav.jobs"), hint: t("navHints.jobs") },
   { value: "system" as ConsoleView, label: t("nav.system"), hint: t("navHints.system") },
@@ -218,6 +228,9 @@ const headerMeta = computed(() => {
   }
   if (activeView.value === "llm") {
     return t("headerMeta.llm", { count: llmConfigs.value.length });
+  }
+  if (activeView.value === "sites") {
+    return t("headerMeta.sites", { count: sites.value.length });
   }
   if (activeView.value === "system") {
     return t("headerMeta.system", {
@@ -811,6 +824,91 @@ async function selectLlmConfig(configId: string) {
   selectedLlmConfigId.value = configId;
 }
 
+async function refreshSites(options: { mode?: RefreshMode } = {}) {
+  const mode = options.mode ?? "visible";
+  if (mode === "visible") {
+    loadingSites.value = true;
+  }
+
+  try {
+    sites.value = await api.listSites();
+    if (!sites.value.length) {
+      selectedSiteId.value = null;
+      return;
+    }
+    if (!selectedSiteId.value || !sites.value.some((s) => s.id === selectedSiteId.value)) {
+      selectedSiteId.value = sites.value[0].id;
+    }
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    if (mode === "visible") {
+      loadingSites.value = false;
+    }
+  }
+}
+
+async function createSite(payload: CreateSiteRequest) {
+  busySite.value = true;
+  try {
+    const created = await api.createSite(payload);
+    message.value = `${t("messages.siteCreated")} "${created.display_name}"`;
+    messageTone.value = "success";
+    await refreshSites();
+    selectedSiteId.value = created.id;
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    busySite.value = false;
+  }
+}
+
+async function updateSite(siteId: string, payload: UpdateSiteRequest) {
+  busySite.value = true;
+  try {
+    const updated = await api.updateSite(siteId, payload);
+    message.value = `${t("messages.siteUpdated")} "${updated.display_name}"`;
+    messageTone.value = "success";
+    await refreshSites();
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    busySite.value = false;
+  }
+}
+
+async function deleteSite(siteId: string) {
+  busySite.value = true;
+  try {
+    await api.deleteSite(siteId);
+    message.value = t("messages.siteDeleted");
+    messageTone.value = "warning";
+    await refreshSites();
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    busySite.value = false;
+  }
+}
+
+async function deploySite(siteId: string) {
+  busySite.value = true;
+  try {
+    await api.deploySite(siteId);
+    message.value = t("messages.siteDeployStarted");
+    messageTone.value = "info";
+    await refreshSites();
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    busySite.value = false;
+  }
+}
+
+async function selectSite(siteId: string) {
+  selectedSiteId.value = siteId;
+}
+
 async function bootstrap() {
   await Promise.all([
     refreshHealth(),
@@ -822,6 +920,7 @@ async function bootstrap() {
     refreshLeadRecipients(),
     refreshLlmProviders(),
     refreshLlmConfigs(),
+    refreshSites(),
   ]);
   if (selectedCampaignId.value) {
     await refreshSelectedCampaign();
@@ -853,6 +952,7 @@ onMounted(async () => {
         refreshJobsWorkspace({ mode: "silent" }),
         refreshLinkedInSession({ mode: "silent" }),
         refreshLlmConfigs({ mode: "silent" }),
+        refreshSites({ mode: "silent" }),
       ]);
     } finally {
       pollInFlight = false;
@@ -1096,6 +1196,20 @@ onUnmounted(() => {
           @delete-config="deleteLlmConfig"
           @activate-config="activateLlmConfig"
           @deactivate-config="deactivateLlmConfig"
+        />
+      </section>
+
+      <section v-else-if="activeView === 'sites'" class="view-grid">
+        <SitesWorkspace
+          :sites="sites"
+          :selected-site-id="selectedSiteId"
+          :loading-sites="loadingSites"
+          :busy="busySite"
+          @select-site="selectSite"
+          @create-site="createSite"
+          @update-site="updateSite"
+          @delete-site="deleteSite"
+          @deploy-site="deploySite"
         />
       </section>
 

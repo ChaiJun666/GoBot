@@ -133,6 +133,50 @@ class Database:
                 );
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_configs_display_name
                 ON llm_configs(display_name);
+
+                CREATE TABLE IF NOT EXISTS sites (
+                    id TEXT PRIMARY KEY,
+                    display_name TEXT NOT NULL,
+                    slug TEXT NOT NULL UNIQUE,
+                    domain TEXT NOT NULL,
+                    note TEXT,
+                    server_ip TEXT NOT NULL,
+                    ssh_user TEXT NOT NULL,
+                    encrypted_ssh_password TEXT NOT NULL,
+                    wp_admin_user TEXT NOT NULL DEFAULT 'admin',
+                    encrypted_wp_admin_password TEXT,
+                    wp_admin_email TEXT NOT NULL,
+                    mysql_database TEXT NOT NULL,
+                    mysql_user TEXT NOT NULL,
+                    encrypted_mysql_password TEXT NOT NULL,
+                    encrypted_mysql_root_password TEXT NOT NULL,
+                    ssl_mode TEXT NOT NULL DEFAULT 'none',
+                    cloudflare_zone_id TEXT,
+                    encrypted_cloudflare_api_token TEXT,
+                    cloudflare_dns_proxy INTEGER NOT NULL DEFAULT 0,
+                    wp_plugins_json TEXT NOT NULL DEFAULT '[]',
+                    status TEXT NOT NULL DEFAULT 'draft',
+                    deploy_log TEXT,
+                    site_url TEXT,
+                    wp_admin_url TEXT,
+                    deployed_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_sites_created_at
+                ON sites(created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS site_deployments (
+                    id TEXT PRIMARY KEY,
+                    site_id TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    log TEXT,
+                    created_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    FOREIGN KEY (site_id) REFERENCES sites(id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_site_deployments_site
+                ON site_deployments(site_id, created_at DESC);
                 """
             )
             self._ensure_column(connection, "scrape_jobs", "campaign_id", "TEXT")
@@ -797,6 +841,144 @@ class Database:
         record["is_active"] = bool(record["is_active"])
         record["has_api_key"] = bool(record.get("encrypted_api_key"))
         return record
+
+    # -- Sites CRUD --
+
+    def create_site(
+        self,
+        *,
+        site_id: str,
+        display_name: str,
+        slug: str,
+        domain: str,
+        server_ip: str,
+        ssh_user: str,
+        encrypted_ssh_password: str,
+        wp_admin_user: str = "admin",
+        encrypted_wp_admin_password: str | None = None,
+        wp_admin_email: str = "",
+        mysql_database: str,
+        mysql_user: str,
+        encrypted_mysql_password: str,
+        encrypted_mysql_root_password: str,
+        ssl_mode: str = "none",
+        cloudflare_zone_id: str | None = None,
+        encrypted_cloudflare_api_token: str | None = None,
+        cloudflare_dns_proxy: bool = False,
+        wp_plugins_json: str = "[]",
+        note: str | None = None,
+    ) -> None:
+        now = utc_now_iso()
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO sites (
+                    id, display_name, slug, domain, note,
+                    server_ip, ssh_user, encrypted_ssh_password,
+                    wp_admin_user, encrypted_wp_admin_password, wp_admin_email,
+                    mysql_database, mysql_user, encrypted_mysql_password,
+                    encrypted_mysql_root_password,
+                    ssl_mode, cloudflare_zone_id, encrypted_cloudflare_api_token,
+                    cloudflare_dns_proxy, wp_plugins_json,
+                    status, created_at, updated_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?,
+                    ?, ?, ?
+                )
+                """,
+                (
+                    site_id, display_name, slug, domain, note,
+                    server_ip, ssh_user, encrypted_ssh_password,
+                    wp_admin_user, encrypted_wp_admin_password, wp_admin_email,
+                    mysql_database, mysql_user, encrypted_mysql_password,
+                    encrypted_mysql_root_password,
+                    ssl_mode, cloudflare_zone_id, encrypted_cloudflare_api_token,
+                    int(cloudflare_dns_proxy), wp_plugins_json,
+                    "draft", now, now,
+                ),
+            )
+
+    def list_sites(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM sites ORDER BY datetime(created_at) DESC"
+            ).fetchall()
+        return [self._row_to_site_record(row) for row in rows]
+
+    def get_site(self, site_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM sites WHERE id = ?", (site_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_site_record(row)
+
+    def update_site(self, site_id: str, **fields: Any) -> None:
+        fields["updated_at"] = utc_now_iso()
+        self._update_record("sites", "id", site_id, **fields)
+
+    def delete_site(self, site_id: str) -> None:
+        with self._lock, self._connect() as connection:
+            connection.execute("DELETE FROM site_deployments WHERE site_id = ?", (site_id,))
+            connection.execute("DELETE FROM sites WHERE id = ?", (site_id,))
+
+    def _row_to_site_record(self, row: sqlite3.Row) -> dict[str, Any]:
+        record = dict(row)
+        record["has_ssh_password"] = bool(record.get("encrypted_ssh_password"))
+        record["has_wp_admin_password"] = bool(record.get("encrypted_wp_admin_password"))
+        record["has_mysql_password"] = bool(record.get("encrypted_mysql_password"))
+        record["has_cloudflare_api_token"] = bool(record.get("encrypted_cloudflare_api_token"))
+        record["cloudflare_dns_proxy"] = bool(record["cloudflare_dns_proxy"])
+        record["wp_plugins"] = json.loads(record.pop("wp_plugins_json"))
+        return record
+
+    # -- Site Deployments CRUD --
+
+    def create_deployment(
+        self,
+        *,
+        deployment_id: str,
+        site_id: str,
+    ) -> None:
+        now = utc_now_iso()
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO site_deployments (id, site_id, status, log, created_at)
+                VALUES (?, ?, 'pending', NULL, ?)
+                """,
+                (deployment_id, site_id, now),
+            )
+
+    def get_deployment(self, deployment_id: str) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM site_deployments WHERE id = ?", (deployment_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    def list_deployments_by_site(self, site_id: str) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM site_deployments
+                WHERE site_id = ?
+                ORDER BY datetime(created_at) DESC
+                """,
+                (site_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def update_deployment(self, deployment_id: str, **fields: Any) -> None:
+        self._update_record("site_deployments", "id", deployment_id, **fields)
 
     def _update_record(self, table: str, key_column: str, key_value: str, **fields: Any) -> None:
         assignments = ", ".join(f"{column} = ?" for column in fields)
