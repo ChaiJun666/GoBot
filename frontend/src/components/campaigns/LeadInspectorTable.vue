@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
+import LeadEditDrawer from "@/components/campaigns/LeadEditDrawer.vue";
 import type { CampaignDetail, EnrichedLead } from "@/types";
 
 const props = defineProps<{
@@ -10,9 +11,13 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   export: [leads: EnrichedLead[]];
+  editLead: [campaignId: string, leadId: string, updates: Record<string, string | null>];
+  deleteLead: [campaignId: string, leadId: string];
 }>();
 
 const filterText = ref("");
+const editingLead = ref<EnrichedLead | null>(null);
+const deletingLeadId = ref<string | null>(null);
 const { t } = useI18n();
 const source = computed(() => props.campaign?.source ?? "google_maps");
 const isLinkedIn = computed(() => source.value === "linkedin");
@@ -51,6 +56,18 @@ const matchCountLabel = computed(() => t("leadTable.matches", { count: filteredR
 
 function renderValue(value: string | null | undefined): string {
   return value?.trim() || t("common.unavailable");
+}
+
+function handleEditSave(leadId: string, updates: Record<string, string | null>) {
+  if (!props.campaign) return;
+  emit("editLead", props.campaign.id, leadId, updates);
+  editingLead.value = null;
+}
+
+function confirmDelete() {
+  if (!deletingLeadId.value || !props.campaign) return;
+  emit("deleteLead", props.campaign.id, deletingLeadId.value);
+  deletingLeadId.value = null;
 }
 </script>
 
@@ -92,10 +109,21 @@ function renderValue(value: string | null | undefined): string {
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="lead in filteredResults"
-              :key="`${lead.name}-${lead.profile_url ?? lead.reference_link ?? lead.address}`"
-            >
+            <template v-for="lead in filteredResults" :key="lead.id">
+              <tr v-if="deletingLeadId === lead.id" class="row-deleting">
+                <td colspan="7">
+                  <div class="inline-confirm">
+                    <span class="inline-confirm-text">{{ t("leadTable.deleteConfirmTitle") }} <strong>{{ lead.name }}</strong></span>
+                    <div class="inline-confirm-actions">
+                      <button class="action-button" type="button" style="font-size:0.7rem;padding:0.15rem 0.5rem"
+                        @click="confirmDelete">{{ t("leadTable.confirmDelete") }}</button>
+                      <button class="ghost-button" type="button" style="font-size:0.7rem;padding:0.15rem 0.5rem"
+                        @click="deletingLeadId = null">{{ t("leadTable.cancelDelete") }}</button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              <tr v-else>
               <td>
                 <strong>{{ lead.name }}</strong>
                 <div class="subcell">
@@ -137,12 +165,7 @@ function renderValue(value: string | null | undefined): string {
               </td>
               <td>
                 <div v-if="isLinkedIn">
-                  <a
-                    v-if="lead.profile_url"
-                    :href="lead.profile_url"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
+                  <a v-if="lead.profile_url" :href="lead.profile_url" target="_blank" rel="noreferrer">
                     {{ t("leadTable.details.profileUrl") }}
                   </a>
                   <span v-else>{{ t("common.unavailable") }}</span>
@@ -158,8 +181,15 @@ function renderValue(value: string | null | undefined): string {
                     {{ t("leadTable.details.sourceLink") }}
                   </a>
                 </div>
+                <div class="subcell lead-actions">
+                  <button class="ghost-button" type="button" style="font-size:0.7rem;padding:0.15rem 0.4rem"
+                    @click="editingLead = lead">{{ t("leadTable.editLead") }}</button>
+                  <button class="ghost-button" type="button" style="font-size:0.7rem;padding:0.15rem 0.4rem;color:var(--color-danger)"
+                    @click="deletingLeadId = lead.id">{{ t("leadTable.deleteLead") }}</button>
+                </div>
               </td>
             </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -167,11 +197,28 @@ function renderValue(value: string | null | undefined): string {
         <p>{{ t("leadTable.emptyTitle") }}</p>
         <span>{{ t("leadTable.emptyDescription") }}</span>
       </div>
+
     </template>
 
     <div v-else class="empty-state">
       <p>{{ loading ? t("common.loadingCampaign") : t("common.noCampaignSelected") }}</p>
       <span>{{ t("leadTable.noCampaignDescription") }}</span>
     </div>
+
+    <LeadEditDrawer
+      :open="Boolean(editingLead)"
+      :lead="editingLead"
+      @save="handleEditSave"
+      @cancel="editingLead = null"
+    />
   </section>
 </template>
+
+<style scoped>
+.lead-actions { display: flex; gap: 0.25rem; margin-top: 0.25rem; }
+.row-deleting { background: color-mix(in srgb, var(--color-danger) 8%, transparent); }
+.row-deleting td { padding: 0.5rem 0.75rem; }
+.inline-confirm { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+.inline-confirm-text { font-size: 0.85rem; }
+.inline-confirm-actions { display: flex; gap: 0.35rem; }
+</style>

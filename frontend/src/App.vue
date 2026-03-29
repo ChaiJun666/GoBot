@@ -723,6 +723,39 @@ async function retryJob(jobId: string) {
   }
 }
 
+async function handleEditLead(campaignId: string, leadId: string, updates: Record<string, string | null>) {
+  try {
+    const result = await api.updateCampaignLead(campaignId, leadId, updates);
+    if (selectedCampaignDetail.value) {
+      selectedCampaignDetail.value = {
+        ...selectedCampaignDetail.value,
+        total_leads: result.campaign.total_leads,
+        average_score: result.campaign.average_score,
+        priority_leads: result.campaign.priority_leads,
+        results: selectedCampaignDetail.value.results.map((l) =>
+          l.id === leadId ? result.lead : l,
+        ),
+      };
+    }
+    message.value = t("messages.leadUpdated");
+    messageTone.value = "success";
+  } catch (error) {
+    setMessage(error);
+  }
+}
+
+async function handleDeleteLead(campaignId: string, leadId: string) {
+  try {
+    await api.deleteCampaignLead(campaignId, leadId);
+    await refreshSelectedCampaign();
+    await refreshCampaignWorkspace({ mode: "silent" });
+    message.value = t("messages.leadDeleted");
+    messageTone.value = "success";
+  } catch (error) {
+    setMessage(error);
+  }
+}
+
 async function refreshLlmProviders() {
   try {
     llmProviders.value = await api.getLlmProviders();
@@ -1182,6 +1215,8 @@ onUnmounted(() => {
           :retrying="retryingCampaignId === selectedCampaignDetail?.id"
           @retry="retryCampaign"
           @export="exportCampaignLeads"
+          @edit-lead="handleEditLead"
+          @delete-lead="handleDeleteLead"
         />
       </section>
 

@@ -11,6 +11,7 @@ import type {
   CreateCampaignResponse,
   CreateScrapeJobRequest,
   CreateScrapeJobResponse,
+  EnrichedLead,
   GenerateEmailsRequest,
   GenerateEmailsResponse,
   HealthResponse,
@@ -60,6 +61,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       // Ignore JSON parsing errors and keep fallback detail.
     }
     throw new Error(detail);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return (await response.json()) as T;
@@ -112,6 +117,21 @@ export const api = {
   retryCampaign(campaignId: string): Promise<CampaignSummary> {
     return request<CampaignSummary>(`/campaigns/${campaignId}/retry`, {
       method: "POST",
+    });
+  },
+  updateCampaignLead(
+    campaignId: string,
+    leadId: string,
+    payload: Record<string, string | null>,
+  ): Promise<{ lead: EnrichedLead; campaign: CampaignSummary }> {
+    return request<{ lead: EnrichedLead; campaign: CampaignSummary }>(
+      `/campaigns/${campaignId}/leads/${leadId}`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+    );
+  },
+  deleteCampaignLead(campaignId: string, leadId: string): Promise<void> {
+    return request<void>(`/campaigns/${campaignId}/leads/${leadId}`, {
+      method: "DELETE",
     });
   },
   createCampaign(payload: CreateCampaignRequest): Promise<CreateCampaignResponse> {

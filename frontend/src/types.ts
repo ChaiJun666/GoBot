@@ -32,6 +32,7 @@ export interface ScrapeJobSummary {
 }
 
 export interface ScrapedLead {
+  id: string;
   name: string;
   address: string;
   location: string | null;

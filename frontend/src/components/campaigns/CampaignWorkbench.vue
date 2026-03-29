@@ -16,6 +16,8 @@ defineProps<{
 const emit = defineEmits<{
   retry: [campaignId: string];
   export: [leads: EnrichedLead[]];
+  editLead: [campaignId: string, leadId: string, updates: Record<string, string | null>];
+  deleteLead: [campaignId: string, leadId: string];
 }>();
 
 const { t } = useI18n();
@@ -122,7 +124,7 @@ function formatDate(value: string | null): string {
       </div>
     </section>
 
-    <LeadInspectorTable :campaign="campaign" :loading="loading" @export="emit('export', $event)" />
+    <LeadInspectorTable :campaign="campaign" :loading="loading" @export="emit('export', $event)" @edit-lead="(c, l, u) => emit('editLead', c, l, u)" @delete-lead="(c, l) => emit('deleteLead', c, l)" />
 
     <details class="panel panel-detail telemetry-disclosure" :open="Boolean(linkedJob && campaign)">
       <summary>{{ t("campaigns.telemetryTitle") }}</summary>

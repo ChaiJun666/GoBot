@@ -10,6 +10,8 @@ from app.schemas.campaigns import (
     CampaignSummary,
     CreateCampaignRequest,
     CreateCampaignResponse,
+    UpdateLeadRequest,
+    UpdateLeadResponse,
 )
 from app.schemas.source_query import resolve_query_payload
 
@@ -100,3 +102,36 @@ async def get_campaign(campaign_id: str, request: Request) -> CampaignDetail:
     if campaign is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     return CampaignDetail.from_record(campaign)
+
+
+@router.patch("/{campaign_id}/leads/{lead_id}", response_model=UpdateLeadResponse)
+async def update_campaign_lead(
+    campaign_id: str,
+    lead_id: str,
+    payload: UpdateLeadRequest,
+    request: Request,
+) -> UpdateLeadResponse:
+    database = get_database(request)
+    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
+    lead = database.update_campaign_lead(campaign_id, lead_id, updates)
+    if lead is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign or lead not found")
+    refreshed = database.get_campaign(campaign_id)
+    return UpdateLeadResponse(
+        lead=lead,
+        campaign=CampaignSummary.from_record(refreshed),
+    )
+
+
+@router.delete("/{campaign_id}/leads/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_campaign_lead(
+    campaign_id: str,
+    lead_id: str,
+    request: Request,
+) -> None:
+    database = get_database(request)
+    deleted = database.delete_campaign_lead(campaign_id, lead_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign or lead not found")

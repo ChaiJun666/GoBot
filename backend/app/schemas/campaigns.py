@@ -62,3 +62,22 @@ class CampaignDetail(CampaignSummary):
 
 class CreateCampaignResponse(BaseModel):
     campaign: CampaignSummary
+
+
+class UpdateLeadRequest(BaseModel):
+    name: str | None = None
+    address: str | None = None
+    location: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    website: str | None = None
+    headline: str | None = None
+    current_company: str | None = None
+    profile_url: str | None = None
+    reference_link: str | None = None
+    rating: str | None = None
+
+
+class UpdateLeadResponse(BaseModel):
+    lead: EnrichedLead
+    campaign: CampaignSummary

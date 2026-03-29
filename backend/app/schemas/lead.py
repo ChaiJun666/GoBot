@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
@@ -23,6 +24,7 @@ class LeadIntelligence(BaseModel):
 
 
 class ScrapedLead(BaseModel):
+    id: str = Field(default_factory=lambda: uuid4().hex)
     name: str
     address: str
     location: str | None = None

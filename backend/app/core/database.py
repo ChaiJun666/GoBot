@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import hashlib
 import json
 from pathlib import Path
 import sqlite3
@@ -12,6 +13,19 @@ from app.schemas.lead import EnrichedLead, ScrapedLead
 
 def utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _ensure_lead_id(lead_data: dict[str, Any]) -> dict[str, Any]:
+    if "id" in lead_data and lead_data["id"]:
+        return lead_data
+    identity = "|".join([
+        lead_data.get("name", ""),
+        lead_data.get("profile_url") or lead_data.get("reference_link") or lead_data.get("address", ""),
+        lead_data.get("email") or "",
+        lead_data.get("source", ""),
+    ])
+    lead_data["id"] = hashlib.sha256(identity.encode()).hexdigest()[:32]
+    return lead_data
 
 
 class Database:
@@ -1110,6 +1124,73 @@ class Database:
         fields["updated_at"] = utc_now_iso()
         self._update_record("lead_email_stages", "id", record_id, **fields)
 
+    def update_campaign_lead(
+        self,
+        campaign_id: str,
+        lead_id: str,
+        updates: dict[str, Any],
+    ) -> EnrichedLead | None:
+        campaign = self.get_campaign(campaign_id)
+        if campaign is None:
+            return None
+        results = campaign["results"]
+        target: EnrichedLead | None = None
+        for lead in results:
+            if lead.id == lead_id:
+                for key, value in updates.items():
+                    if hasattr(lead, key) and key not in ("id", "intelligence", "source"):
+                        setattr(lead, key, value)
+                target = lead
+                break
+        if target is None:
+            return None
+        summary = self._recalculate_metrics(results)
+        now = utc_now_iso()
+        self._update_record(
+            "campaigns",
+            "id",
+            campaign_id,
+            results_json=json.dumps([lead.model_dump(mode="json") for lead in results]),
+            updated_at=now,
+            **summary,
+        )
+        return target
+
+    def delete_campaign_lead(self, campaign_id: str, lead_id: str) -> bool:
+        campaign = self.get_campaign(campaign_id)
+        if campaign is None:
+            return False
+        results = campaign["results"]
+        original_len = len(results)
+        results = [lead for lead in results if lead.id != lead_id]
+        if len(results) == original_len:
+            return False
+        summary = self._recalculate_metrics(results)
+        now = utc_now_iso()
+        self._update_record(
+            "campaigns",
+            "id",
+            campaign_id,
+            results_json=json.dumps([lead.model_dump(mode="json") for lead in results]),
+            updated_at=now,
+            **summary,
+        )
+        with self._lock, self._connect() as connection:
+            connection.execute("DELETE FROM lead_email_stages WHERE lead_id = ?", (lead_id,))
+        return True
+
+    @staticmethod
+    def _recalculate_metrics(results: list[EnrichedLead]) -> dict[str, int]:
+        if not results:
+            return {"total_leads": 0, "average_score": 0, "priority_leads": 0}
+        total_score = sum(lead.intelligence.score for lead in results)
+        priority_leads = sum(1 for lead in results if lead.intelligence.priority == "HIGH")
+        return {
+            "total_leads": len(results),
+            "average_score": round(total_score / len(results)),
+            "priority_leads": priority_leads,
+        }
+
     def _row_to_lead_stage_record(self, row: sqlite3.Row) -> dict[str, Any]:
         record = dict(row)
         record["manual_override"] = bool(record["manual_override"])
@@ -1142,7 +1223,7 @@ class Database:
         record = dict(row)
         record["query_config"] = json.loads(record.pop("query_config_json"))
         record["results"] = [
-            ScrapedLead.model_validate(item)
+            ScrapedLead.model_validate(_ensure_lead_id(item))
             for item in json.loads(record.pop("results_json"))
         ]
         return record
@@ -1151,7 +1232,7 @@ class Database:
         record = dict(row)
         record["query_config"] = json.loads(record.pop("query_config_json"))
         record["results"] = [
-            EnrichedLead.model_validate(item)
+            EnrichedLead.model_validate(_ensure_lead_id(item))
             for item in json.loads(record.pop("results_json"))
         ]
         return record
