@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from app.api.deps import get_mail_service
@@ -34,7 +36,7 @@ async def list_mailboxes(request: Request) -> list[MailboxSummary]:
 async def create_mailbox(payload: CreateMailboxRequest, request: Request) -> MailboxSummary:
     service = get_mail_service(request)
     try:
-        return service.create_mailbox(payload)
+        return await asyncio.to_thread(service.create_mailbox, payload)
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -58,7 +60,7 @@ async def sync_mailbox(
 ) -> MailboxSyncResponse:
     service = get_mail_service(request)
     try:
-        return service.sync_mailbox(mailbox_id, limit=limit)
+        return await asyncio.to_thread(service.sync_mailbox, mailbox_id, limit=limit)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -92,7 +94,7 @@ async def get_mail_message(message_id: str, request: Request) -> MailMessageDeta
 async def send_mail(payload: SendMailRequest, request: Request) -> SendMailResponse:
     service = get_mail_service(request)
     try:
-        return service.send_mail(payload)
+        return await asyncio.to_thread(service.send_mail, payload)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except RuntimeError as exc:

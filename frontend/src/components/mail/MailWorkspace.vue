@@ -31,6 +31,8 @@ const props = defineProps<{
   savingMailbox: boolean;
   sendingMail: boolean;
   syncingMailboxId: string | null;
+  inboxCount: number;
+  sentCount: number;
 }>();
 
 const emit = defineEmits<{
@@ -44,7 +46,12 @@ const emit = defineEmits<{
   updateComposerOpen: [value: boolean];
 }>();
 
-const { t } = useI18n();
+const { t, tm } = useI18n();
+
+function providerLabel(provider: string): string {
+  const providers = tm("mail.providers") as Record<string, string>;
+  return providers[provider] ?? provider;
+}
 
 const mailboxForm = reactive({
   provider: "gmail" as MailProviderKey,
@@ -160,7 +167,7 @@ function formatDate(value: string | null): string {
 }
 
 function messageCounter(folder: MailFolder): string {
-  const count = folder === props.folder ? props.messages.length : 0;
+  const count = folder === "inbox" ? props.inboxCount : props.sentCount;
   return t("mail.messageCount", { count });
 }
 </script>
@@ -194,7 +201,7 @@ function messageCounter(folder: MailFolder): string {
             </span>
           </div>
           <p class="job-meta">{{ mailbox.email_address }}</p>
-          <p class="job-meta">{{ t(`mail.providers.${mailbox.provider}`) }}</p>
+          <p class="job-meta">{{ providerLabel(mailbox.provider) }}</p>
           <p class="job-meta">{{ t("mail.lastSynced") }}: {{ formatDate(mailbox.last_synced_at) }}</p>
         </button>
       </div>

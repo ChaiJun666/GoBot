@@ -31,7 +31,10 @@ from app.services.mail.crypto import MailSecretCipher
 from app.services.mail.providers import MAIL_PROVIDER_CONFIGS, list_provider_configs
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-SENT_FOLDER_HINTS = ("sent", "sent items", "sent messages", "Sent", "Sent Items")
+SENT_FOLDER_HINTS = (
+    "sent", "sent items", "sent messages", "Sent", "Sent Items",
+    "已发送", "已发送邮件", "已发送邮件箱",
+)
 
 
 @dataclass
@@ -124,6 +127,7 @@ class MailService:
         sent_count = 0
         try:
             imap.login(mailbox["email_address"], secret)
+            self._send_imap_id(imap)
             inbox_count = self._sync_folder(imap, mailbox_id, MailFolder.INBOX, "INBOX", limit)
             sent_folder = self._resolve_sent_folder(imap)
             if sent_folder is not None:
@@ -190,6 +194,24 @@ class MailService:
             smtp.login(mailbox["email_address"], secret)
             smtp.send_message(message)
             self.database.mark_mailbox_ready(mailbox["id"])
+            now = datetime.now(UTC).isoformat()
+            snippet = (payload.body or "")[:200]
+            self.database.upsert_mail_message(
+                message_id=uuid4().hex,
+                mailbox_id=mailbox["id"],
+                folder="sent",
+                remote_uid=uuid4().hex,
+                message_id_header=message.get("Message-ID"),
+                subject=payload.subject.strip(),
+                from_name=None,
+                from_address=mailbox["email_address"],
+                to_summary=", ".join(recipients),
+                snippet=snippet,
+                body_text=payload.body,
+                is_read=True,
+                sent_at=now,
+                received_at=None,
+            )
         except Exception as exc:
             self.database.mark_mailbox_error(mailbox["id"], str(exc))
             raise RuntimeError(str(exc)) from exc
@@ -217,6 +239,16 @@ class MailService:
     def _create_imap_client(self, host: str, port: int) -> imaplib.IMAP4_SSL:
         return imaplib.IMAP4_SSL(host=host, port=port)
 
+    @staticmethod
+    def _send_imap_id(imap: imaplib.IMAP4_SSL) -> None:
+        """Send IMAP ID command (RFC 2971). Required by 163.com and other Chinese providers."""
+        tag = imap._new_tag()
+        imap.send(tag + b' ID ("name" "GoBot" "version" "1.0.0")\r\n')
+        while True:
+            line = imap.readline()
+            if line.startswith(tag):
+                break
+
     def _create_smtp_client(self, *, host: str, port: int, use_starttls: bool) -> smtplib.SMTP:
         if use_starttls:
             client = smtplib.SMTP(host=host, port=port, timeout=30)
@@ -231,17 +263,27 @@ class MailService:
         if status != "OK" or folders is None:
             return None
 
-        decoded: list[str] = []
+        decoded: list[tuple[str, str]] = []  # (folder_name, flags_text)
         for raw in folders:
             text = raw.decode("utf-8", errors="ignore")
+            # Extract flags from the first part (e.g. "(\\Sent)")
+            flags_match = re.search(r"\(([^)]*)\)", text)
+            flags_text = flags_match.group(1) if flags_match else ""
+            # Extract folder name from the last quoted segment
             match = re.search(r'"([^"]+)"\s*$', text)
             if match:
-                decoded.append(match.group(1))
+                decoded.append((match.group(1), flags_text))
                 continue
             parts = text.split(" ")
-            decoded.append(parts[-1].strip('"'))
+            decoded.append((parts[-1].strip('"'), flags_text))
 
-        normalized_map = {folder.casefold(): folder for folder in decoded}
+        # Prefer IMAP \Sent flag
+        for name, flags in decoded:
+            if r"\Sent" in flags:
+                return name
+
+        # Fallback: match by name hints
+        normalized_map = {name.casefold(): name for name, _ in decoded}
         for hint in SENT_FOLDER_HINTS:
             if hint in normalized_map:
                 return normalized_map[hint]
@@ -258,7 +300,7 @@ class MailService:
         remote_folder: str,
         limit: int,
     ) -> int:
-        status, _ = imap.select(f'"{remote_folder}"', readonly=True)
+        status, _ = imap.select(f'"{remote_folder}"', readonly=False)
         if status != "OK":
             return 0
 
