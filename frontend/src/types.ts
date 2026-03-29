@@ -244,6 +244,11 @@ export interface SendMailResponse {
   message: string;
 }
 
+export interface MailMessageCountResponse {
+  folder: MailFolder;
+  count: number;
+}
+
 export interface LeadRecipientSummary {
   id: string;
   email: string;

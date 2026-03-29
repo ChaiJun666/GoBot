@@ -794,12 +794,19 @@ tbody td {
   display: grid;
   gap: 18px;
   align-content: start;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
 }
 
 .mailbox-list,
 .mail-message-list {
   display: grid;
   gap: 12px;
+}
+
+.mail-message-list {
+  max-height: calc(100vh - 320px);
+  overflow-y: auto;
 }
 
 .mailbox-card,
@@ -850,6 +857,8 @@ tbody td {
   border-radius: 18px;
   padding: 16px;
   background: rgba(255, 255, 255, 0.48);
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .mail-message-body pre {
@@ -858,6 +867,18 @@ tbody td {
   word-break: break-word;
   font-family: "IBM Plex Sans", sans-serif;
   line-height: 1.6;
+}
+
+.mail-load-more,
+.mail-no-more {
+  text-align: center;
+  padding: 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.mail-load-more {
+  color: var(--accent);
 }
 
 .mail-inline-action {

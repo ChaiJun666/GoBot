@@ -67,6 +67,8 @@ const currentMailFolder = ref<MailFolder>("inbox");
 const mailMessages = ref<MailMessageSummary[]>([]);
 const mailInboxCount = ref(0);
 const mailSentCount = ref(0);
+const mailHasMore = ref(true);
+const mailLoadingMore = ref(false);
 const selectedMailMessage = ref<MailMessageDetail | null>(null);
 const leadRecipients = ref<LeadRecipientSummary[]>([]);
 const llmConfigs = ref<LlmConfigSummary[]>([]);
@@ -339,11 +341,15 @@ async function refreshLeadRecipients() {
   }
 }
 
+const MAIL_PAGE_SIZE = 20;
+
 async function refreshMailMessages(options: { mode?: RefreshMode } = {}) {
   if (!selectedMailboxId.value) {
     mailMessages.value = [];
     mailInboxCount.value = 0;
     mailSentCount.value = 0;
+    mailHasMore.value = true;
+    mailLoadingMore.value = false;
     selectedMailMessage.value = null;
     return;
   }
@@ -354,18 +360,16 @@ async function refreshMailMessages(options: { mode?: RefreshMode } = {}) {
   }
 
   try {
-    const [messages, inboxMessages, sentMessages] = await Promise.all([
-      api.listMailMessages(selectedMailboxId.value, currentMailFolder.value),
-      currentMailFolder.value === "inbox"
-        ? Promise.resolve(null as MailMessageSummary[] | null)
-        : api.listMailMessages(selectedMailboxId.value, "inbox"),
-      currentMailFolder.value === "sent"
-        ? Promise.resolve(null as MailMessageSummary[] | null)
-        : api.listMailMessages(selectedMailboxId.value, "sent"),
+    const [messages, inboxCount, sentCount] = await Promise.all([
+      api.listMailMessages(selectedMailboxId.value, currentMailFolder.value, MAIL_PAGE_SIZE, 0),
+      api.countMailMessages(selectedMailboxId.value, "inbox"),
+      api.countMailMessages(selectedMailboxId.value, "sent"),
     ]);
     mailMessages.value = messages;
-    mailInboxCount.value = currentMailFolder.value === "inbox" ? messages.length : (inboxMessages?.length ?? 0);
-    mailSentCount.value = currentMailFolder.value === "sent" ? messages.length : (sentMessages?.length ?? 0);
+    mailInboxCount.value = inboxCount.count;
+    mailSentCount.value = sentCount.count;
+    mailHasMore.value = messages.length >= MAIL_PAGE_SIZE;
+    mailLoadingMore.value = false;
     if (!mailMessages.value.some((message) => message.id === selectedMailMessage.value?.id)) {
       selectedMailMessage.value = null;
     }
@@ -375,6 +379,29 @@ async function refreshMailMessages(options: { mode?: RefreshMode } = {}) {
     if (mode === "visible") {
       loadingMailMessages.value = false;
     }
+  }
+}
+
+async function loadMoreMessages() {
+  if (!selectedMailboxId.value || mailLoadingMore.value || !mailHasMore.value) return;
+
+  mailLoadingMore.value = true;
+  try {
+    const currentCount = mailMessages.value.length;
+    const newMessages = await api.listMailMessages(
+      selectedMailboxId.value,
+      currentMailFolder.value,
+      MAIL_PAGE_SIZE,
+      currentCount,
+    );
+    if (newMessages.length > 0) {
+      mailMessages.value = [...mailMessages.value, ...newMessages];
+    }
+    mailHasMore.value = newMessages.length >= MAIL_PAGE_SIZE;
+  } catch (error) {
+    setMessage(error);
+  } finally {
+    mailLoadingMore.value = false;
   }
 }
 
@@ -1270,6 +1297,8 @@ onUnmounted(() => {
           :syncing-mailbox-id="syncingMailboxId"
           :inbox-count="mailInboxCount"
           :sent-count="mailSentCount"
+          :has-more="mailHasMore"
+          :loading-more="mailLoadingMore"
           @select-mailbox="selectMailbox"
           @select-folder="selectMailFolder"
           @select-message="loadMailMessage"

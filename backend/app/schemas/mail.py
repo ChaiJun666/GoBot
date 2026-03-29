@@ -128,3 +128,8 @@ class MailboxSyncResponse(BaseModel):
     mailbox: MailboxSummary
     inbox_count: int = 0
     sent_count: int = 0
+
+
+class MailMessageCountResponse(BaseModel):
+    folder: MailFolder
+    count: int

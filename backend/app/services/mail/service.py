@@ -151,14 +151,20 @@ class MailService:
             sent_count=sent_count,
         )
 
-    def list_messages(self, mailbox_id: str, *, folder: MailFolder, limit: int = 50) -> list[MailMessageSummary]:
+    def list_messages(self, mailbox_id: str, *, folder: MailFolder, limit: int = 20, offset: int = 0) -> list[MailMessageSummary]:
         mailbox = self.database.get_mailbox(mailbox_id)
         if mailbox is None:
             raise LookupError("Mailbox not found")
         return [
             MailMessageSummary.from_record(item)
-            for item in self.database.list_mail_messages(mailbox_id=mailbox_id, folder=folder.value, limit=limit)
+            for item in self.database.list_mail_messages(mailbox_id=mailbox_id, folder=folder.value, limit=limit, offset=offset)
         ]
+
+    def count_messages(self, mailbox_id: str, folder: MailFolder) -> int:
+        mailbox = self.database.get_mailbox(mailbox_id)
+        if mailbox is None:
+            raise LookupError("Mailbox not found")
+        return self.database.count_mail_messages(mailbox_id=mailbox_id, folder=folder.value)
 
     def get_message(self, message_id: str) -> MailMessageDetail:
         message = self.database.get_mail_message(message_id)

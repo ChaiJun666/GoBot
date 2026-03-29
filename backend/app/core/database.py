@@ -724,7 +724,7 @@ class Database:
                 ),
             )
 
-    def list_mail_messages(self, *, mailbox_id: str, folder: str, limit: int) -> list[dict[str, Any]]:
+    def list_mail_messages(self, *, mailbox_id: str, folder: str, limit: int, offset: int = 0) -> list[dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute(
                 """
@@ -733,11 +733,19 @@ class Database:
                 FROM mail_messages
                 WHERE mailbox_id = ? AND folder = ?
                 ORDER BY COALESCE(datetime(received_at), datetime(sent_at), datetime(created_at)) DESC
-                LIMIT ?
+                LIMIT ? OFFSET ?
                 """,
-                (mailbox_id, folder, limit),
+                (mailbox_id, folder, limit, offset),
             ).fetchall()
         return [self._row_to_mail_message_record(row) for row in rows]
+
+    def count_mail_messages(self, *, mailbox_id: str, folder: str) -> int:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) FROM mail_messages WHERE mailbox_id = ? AND folder = ?",
+                (mailbox_id, folder),
+            ).fetchone()
+        return row[0] if row else 0
 
     def get_mail_message(self, message_id: str) -> dict[str, Any] | None:
         with self._connect() as connection:

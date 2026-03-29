@@ -9,6 +9,7 @@ from app.schemas.mail import (
     CreateMailboxRequest,
     LeadRecipientSummary,
     MailFolder,
+    MailMessageCountResponse,
     MailMessageDetail,
     MailMessageSummary,
     MailProviderConfig,
@@ -72,11 +73,26 @@ async def list_mail_messages(
     mailbox_id: str,
     request: Request,
     folder: MailFolder = Query(default=MailFolder.INBOX),
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list[MailMessageSummary]:
     service = get_mail_service(request)
     try:
-        return service.list_messages(mailbox_id, folder=folder, limit=limit)
+        return service.list_messages(mailbox_id, folder=folder, limit=limit, offset=offset)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/mailboxes/{mailbox_id}/messages/count", response_model=MailMessageCountResponse)
+async def count_mail_messages(
+    mailbox_id: str,
+    request: Request,
+    folder: MailFolder = Query(default=MailFolder.INBOX),
+) -> MailMessageCountResponse:
+    service = get_mail_service(request)
+    try:
+        count = service.count_messages(mailbox_id, folder=folder)
+        return MailMessageCountResponse(folder=folder, count=count)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 

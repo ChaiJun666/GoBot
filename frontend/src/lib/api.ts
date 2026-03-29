@@ -17,6 +17,7 @@ import type {
   HealthResponse,
   LeadEmailHistory,
   LeadOutreachSummary,
+  MailMessageCountResponse,
   LeadRecipientSummary,
   LinkedInSessionStatus,
   LlmConfigSummary,
@@ -163,9 +164,14 @@ export const api = {
       method: "POST",
     });
   },
-  listMailMessages(mailboxId: string, folder: MailFolder, limit = 50): Promise<MailMessageSummary[]> {
+  listMailMessages(mailboxId: string, folder: MailFolder, limit = 20, offset = 0): Promise<MailMessageSummary[]> {
     return request<MailMessageSummary[]>(
-      `/mail/mailboxes/${mailboxId}/messages?folder=${folder}&limit=${limit}`,
+      `/mail/mailboxes/${mailboxId}/messages?folder=${folder}&limit=${limit}&offset=${offset}`,
+    );
+  },
+  countMailMessages(mailboxId: string, folder: MailFolder): Promise<MailMessageCountResponse> {
+    return request<MailMessageCountResponse>(
+      `/mail/mailboxes/${mailboxId}/messages/count?folder=${folder}`,
     );
   },
   getMailMessage(messageId: string): Promise<MailMessageDetail> {

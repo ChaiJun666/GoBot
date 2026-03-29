@@ -348,6 +348,8 @@ export const enMessages = {
     loadingMessageDetail: "Loading message...",
     emptyBody: "No message body available.",
     noSnippet: "No preview available.",
+    loadingMore: "Loading more...",
+    noMore: "No more messages.",
     provider: "Provider",
     emailAddress: "Email address",
     authSecret: "Authorization code",

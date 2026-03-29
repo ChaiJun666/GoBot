@@ -33,6 +33,8 @@ const props = defineProps<{
   syncingMailboxId: string | null;
   inboxCount: number;
   sentCount: number;
+  hasMore: boolean;
+  loadingMore: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -44,6 +46,7 @@ const emit = defineEmits<{
   syncMailbox: [mailboxId: string];
   sendMail: [payload: SendMailRequest];
   updateComposerOpen: [value: boolean];
+  loadMore: [];
 }>();
 
 const { t, tm } = useI18n();
@@ -169,6 +172,15 @@ function formatDate(value: string | null): string {
 function messageCounter(folder: MailFolder): string {
   const count = folder === "inbox" ? props.inboxCount : props.sentCount;
   return t("mail.messageCount", { count });
+}
+
+function onMessageListScroll(event: Event) {
+  const el = event.target as HTMLElement;
+  if (!el) return;
+  const threshold = 50;
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < threshold && props.hasMore && !props.loadingMore) {
+    emit("loadMore");
+  }
 }
 </script>
 
@@ -320,7 +332,7 @@ function messageCounter(folder: MailFolder): string {
         </button>
       </div>
 
-      <div v-if="selectedMailbox && hasMessages" class="mail-message-list">
+      <div v-if="selectedMailbox && hasMessages" class="mail-message-list" @scroll="onMessageListScroll">
         <button
           v-for="message in messages"
           :key="message.id"
@@ -342,6 +354,8 @@ function messageCounter(folder: MailFolder): string {
           </p>
           <p class="job-meta">{{ message.snippet || t("mail.noSnippet") }}</p>
         </button>
+        <div v-if="loadingMore" class="mail-load-more">{{ t("mail.loadingMore") }}</div>
+        <div v-else-if="!hasMore && messages.length > 0" class="mail-no-more">{{ t("mail.noMore") }}</div>
       </div>
       <div v-else-if="selectedMailbox" class="empty-state compact-empty">
         <p>{{ loadingMessages ? t("mail.loadingMessages") : t("mail.emptyFolderTitle") }}</p>

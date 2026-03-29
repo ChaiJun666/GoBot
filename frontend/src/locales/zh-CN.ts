@@ -340,6 +340,8 @@ export const zhCnMessages = {
     loadingMessageDetail: "正在加载邮件详情...",
     emptyBody: "暂无邮件正文。",
     noSnippet: "暂无预览摘要。",
+    loadingMore: "加载更多中...",
+    noMore: "没有更多邮件了。",
     provider: "服务商",
     emailAddress: "邮箱地址",
     authSecret: "授权码",
