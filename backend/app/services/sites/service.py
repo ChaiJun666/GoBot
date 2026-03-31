@@ -207,9 +207,11 @@ class SitesService:
             mysql_database = record["mysql_database"]
             mysql_user = record["mysql_user"]
             wp_plugins = json.loads(record.get("wp_plugins_json", "[]"))
+            wp_admin_email = record.get("wp_admin_email", "")
             ssl_mode = record["ssl_mode"]
 
             deploy_dir = f"{_DEPLOY_BASE_DIR}/{slug}"
+            repo_dir = f"{deploy_dir}/wordpress-trade-starter"
 
             _log(f"Connecting to {ssh_user}@{server_ip}...")
             async with asyncssh.connect(
@@ -218,29 +220,76 @@ class SitesService:
                 password=ssh_password,
                 known_hosts=None,
             ) as conn:
-                # Step 1: Check Docker
+                # Step 1: Check root privileges
+                result = await conn.run("id -u", check=False)
+                is_root = result.stdout.strip() == "0"
+                sudo = "" if is_root else "sudo "
+                if not is_root:
+                    _log("Warning: not running as root — will use sudo for privileged operations")
+
+                # Detect OS family for package manager selection
+                result = await conn.run("cat /etc/os-release", check=False)
+                os_release = result.stdout.lower()
+                is_rhel = any(k in os_release for k in ("rhel", "centos", "rocky", "almalinux"))
+                pkg_install = f"{sudo}yum install -y" if is_rhel else f"{sudo}apt-get install -y"
+                pkg_update = f"{sudo}yum makecache" if is_rhel else f"{sudo}apt-get update -qq"
+                _log(f"OS family: {'RHEL/CentOS' if is_rhel else 'Debian/Ubuntu'}")
+
+                # Step 2: Check / Install Docker
                 _log("Checking Docker availability...")
                 result = await conn.run("docker --version", check=False)
                 if result.exit_status != 0:
-                    raise RuntimeError("Docker is not installed or not accessible")
-                _log(f"Docker found: {result.stdout.strip()}")
+                    _log("Docker not found — installing...")
+                    result = await conn.run(
+                        f"{sudo}curl -fsSL https://get.docker.com | {sudo}sh",
+                        check=False,
+                    )
+                    if result.exit_status != 0:
+                        raise RuntimeError(f"Docker installation failed: {result.stderr.strip()}")
+                    await conn.run(f"{sudo}systemctl enable docker", check=False)
+                    await conn.run(f"{sudo}systemctl start docker", check=False)
+                    result = await conn.run("docker --version", check=False)
+                    if result.exit_status != 0:
+                        raise RuntimeError("Docker installation verification failed")
+                    _log(f"Docker installed successfully: {result.stdout.strip()}")
+                else:
+                    _log(f"Docker found: {result.stdout.strip()}")
 
-                # Step 2: Clone repo
+                # Step 3: Check Docker Compose plugin
+                result = await conn.run("docker compose version", check=False)
+                if result.exit_status != 0:
+                    _log("Docker Compose plugin not found — installing...")
+                    result = await conn.run(
+                        f"{pkg_update} && {pkg_install} docker-compose-plugin",
+                        check=False,
+                    )
+                    if result.exit_status != 0:
+                        raise RuntimeError(f"Docker Compose plugin installation failed: {result.stderr.strip()}")
+                    _log("Docker Compose plugin installed")
+                else:
+                    _log(f"Docker Compose: {result.stdout.strip()}")
+
+                # Step 4: Prepare deploy directory & clone repo
                 _log(f"Preparing deploy directory: {deploy_dir}")
-                await conn.run(f"mkdir -p {deploy_dir}", check=True)
-
-                # Remove existing repo if present, then clone
-                await conn.run(f"rm -rf {deploy_dir}/wordpress-trade-starter", check=False)
+                await conn.run(f"{sudo}mkdir -p {deploy_dir}", check=True)
+                await conn.run(f"rm -rf {repo_dir}", check=False)
                 _log("Cloning wordpress-trade-starter repository...")
                 result = await conn.run(
-                    f"git clone {_DEPLOY_REPO_URL} {deploy_dir}/wordpress-trade-starter",
+                    f"git clone {_DEPLOY_REPO_URL} {repo_dir}",
                     check=False,
                 )
                 if result.exit_status != 0:
                     raise RuntimeError(f"git clone failed: {result.stderr.strip()}")
                 _log("Repository cloned successfully")
 
-                # Step 3: Write .env file
+                # Step 5: Configure nginx domain
+                _log(f"Configuring Nginx for {domain}...")
+                await conn.run(
+                    f"sed -i 's/YOUR_DOMAIN/{domain}/g' {repo_dir}/nginx.conf",
+                    check=False,
+                )
+
+                # Step 6: Write .env file
                 env_content = (
                     f"MYSQL_ROOT_PASSWORD={mysql_root_password}\n"
                     f"MYSQL_DATABASE={mysql_database}\n"
@@ -250,30 +299,81 @@ class SitesService:
                 )
                 _log("Writing .env configuration...")
                 async with conn.start_sftp_client() as sftp:
-                    async with sftp.open(f"{deploy_dir}/wordpress-trade-starter/.env", "w") as f:
+                    async with sftp.open(f"{repo_dir}/.env", "w") as f:
                         await f.write(env_content)
 
-                # Step 4: Docker compose up
+                # Step 7: SSL certificate (Let's Encrypt)
+                ssl_dir = f"{repo_dir}/ssl"
+                await conn.run(f"mkdir -p {ssl_dir}", check=False)
+                result = await conn.run(f"test -f {ssl_dir}/fullchain.pem", check=False)
+                if result.exit_status != 0 and wp_admin_email:
+                    _log("Obtaining SSL certificate via Let's Encrypt...")
+                    await conn.run(f"{pkg_install} certbot", check=False)
+                    result = await conn.run(
+                        f"{sudo}certbot certonly --standalone "
+                        f"-d {domain} -d www.{domain} "
+                        f"--email {wp_admin_email} --agree-tos --non-interactive",
+                        check=False,
+                    )
+                    if result.exit_status == 0:
+                        await conn.run(
+                            f"{sudo}cp /etc/letsencrypt/live/{domain}/fullchain.pem {ssl_dir}/fullchain.pem",
+                            check=False,
+                        )
+                        await conn.run(
+                            f"{sudo}cp /etc/letsencrypt/live/{domain}/privkey.pem {ssl_dir}/privkey.pem",
+                            check=False,
+                        )
+                        # Auto-renew cron
+                        cron_cmd = (
+                            f'certbot renew --quiet && '
+                            f'cp /etc/letsencrypt/live/{domain}/fullchain.pem {ssl_dir}/fullchain.pem && '
+                            f'cp /etc/letsencrypt/live/{domain}/privkey.pem {ssl_dir}/privkey.pem && '
+                            f'cd {repo_dir} && docker compose restart nginx'
+                        )
+                        await conn.run(
+                            f'(crontab -l 2>/dev/null; echo "0 3 * * * {cron_cmd}") | {sudo}tee /tmp/crontab.tmp > /dev/null && {sudo}crontab /tmp/crontab.tmp',
+                            check=False,
+                        )
+                        _log("SSL certificate obtained and auto-renewal configured")
+                    else:
+                        _log(f"SSL certificate skipped: {result.stderr.strip()[:100]}")
+                elif result.exit_status == 0:
+                    _log("SSL certificate already exists")
+
+                # Step 8: Docker compose up
                 _log("Starting Docker containers...")
                 result = await conn.run(
-                    f"cd {deploy_dir}/wordpress-trade-starter && docker compose up -d",
+                    f"cd {repo_dir} && {sudo}docker compose up -d",
                     check=False,
                 )
                 if result.exit_status != 0:
                     raise RuntimeError(f"docker compose up failed: {result.stderr.strip()}")
                 _log("Docker containers started")
 
-                # Step 5: Wait for health check
-                _log("Waiting for services to be healthy...")
-                await asyncio.sleep(15)
+                # Step 9: Wait for WordPress to be ready (loop health check)
+                _log("Waiting for WordPress to be ready...")
+                ready = False
+                for attempt in range(30):
+                    result = await conn.run(
+                        f"{sudo}docker compose -f {repo_dir}/docker-compose.yml exec -T wordpress "
+                        f"curl -sf http://localhost > /dev/null 2>&1",
+                        check=False,
+                    )
+                    if result.exit_status == 0:
+                        ready = True
+                        _log(f"WordPress is ready (attempt {attempt + 1})")
+                        break
+                    await asyncio.sleep(2)
+                if not ready:
+                    _log("Warning: WordPress health check timed out after 60s — site may still be starting")
 
-                # Step 6: Install WordPress plugins via WP-CLI (if available)
+                # Step 10: Install WordPress plugins via WP-CLI
                 if wp_plugins:
                     _log(f"Installing {len(wp_plugins)} WordPress plugins...")
                     for plugin_slug in wp_plugins:
                         result = await conn.run(
-                            f"cd {deploy_dir}/wordpress-trade-starter && "
-                            f"docker compose exec -T wordpress "
+                            f"cd {repo_dir} && {sudo}docker compose exec -T wordpress "
                             f"wp plugin install {plugin_slug} --activate --allow-root",
                             check=False,
                         )
@@ -282,7 +382,7 @@ class SitesService:
                         else:
                             _log(f"  Skipped: {plugin_slug} ({result.stderr.strip()[:100]})")
 
-            # Step 7: Cloudflare DNS (outside SSH session)
+            # Step 11: Cloudflare DNS (outside SSH session)
             if ssl_mode == "cloudflare" and record.get("encrypted_cloudflare_api_token") and record.get("cloudflare_zone_id"):
                 _log("Configuring Cloudflare DNS...")
                 cf_token = self._cipher.decrypt(record["encrypted_cloudflare_api_token"])
