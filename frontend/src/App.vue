@@ -77,6 +77,7 @@ const selectedLlmConfigId = ref<string | null>(null);
 const llmConfigWorkspaceRef = ref<InstanceType<typeof LlmConfigWorkspace> | null>(null);
 const sites = ref<SiteSummary[]>([]);
 const selectedSiteId = ref<string | null>(null);
+const siteDeployments = ref<SiteDeployment[]>([]);
 const loadingSites = ref(false);
 const busySite = ref(false);
 const outreachLeads = ref<LeadOutreachSummary[]>([]);
@@ -927,6 +928,7 @@ async function refreshSites(options: { mode?: RefreshMode } = {}) {
     if (!selectedSiteId.value || !sites.value.some((s) => s.id === selectedSiteId.value)) {
       selectedSiteId.value = sites.value[0].id;
     }
+    try { siteDeployments.value = await api.listSiteDeployments(selectedSiteId.value!); } catch { /* ignore */ }
   } catch (error) {
     setMessage(error);
   } finally {
@@ -995,6 +997,10 @@ async function deploySite(siteId: string) {
 
 async function selectSite(siteId: string) {
   selectedSiteId.value = siteId;
+  siteDeployments.value = [];
+  try {
+    siteDeployments.value = await api.listSiteDeployments(siteId);
+  } catch { /* ignore */ }
 }
 
 async function refreshOutreachLeads(options: { mode?: RefreshMode } = {}) {
@@ -1343,6 +1349,7 @@ onUnmounted(() => {
           :sites="sites"
           :selected-site-id="selectedSiteId"
           :loading-sites="loadingSites"
+          :deployments="siteDeployments"
           :busy="busySite"
           @select-site="selectSite"
           @create-site="createSite"

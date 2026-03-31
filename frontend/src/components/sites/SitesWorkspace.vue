@@ -22,6 +22,7 @@ const props = defineProps<{
   selectedSiteId: string | null;
   loadingSites: boolean;
   busy: boolean;
+  deployments: SiteDeployment[];
 }>();
 
 const emit = defineEmits<{
@@ -37,7 +38,6 @@ const { t } = useI18n();
 const showForm = ref(false);
 const editingId = ref<string | null>(null);
 const deletingId = ref<string | null>(null);
-const siteDeployments = ref<SiteDeployment[]>([]);
 
 const form = reactive({
   display_name: "",
@@ -49,7 +49,7 @@ const form = reactive({
   wp_admin_password: "",
   wp_admin_email: "",
   mysql_root_password: "",
-  ssl_mode: "none" as SslMode,
+  ssl_mode: "letsencrypt" as SslMode,
   cloudflare_zone_id: "",
   cloudflare_api_token: "",
   cloudflare_dns_proxy: false,
@@ -107,6 +107,17 @@ function submit() {
     if (form.ssh_user.trim()) payload.ssh_user = form.ssh_user.trim();
     if (form.ssh_password.trim()) payload.ssh_password = form.ssh_password.trim();
     if (form.wp_admin_email.trim()) payload.wp_admin_email = form.wp_admin_email.trim();
+    if (form.wp_admin_user.trim()) payload.wp_admin_user = form.wp_admin_user.trim();
+    if (form.wp_admin_password.trim()) payload.wp_admin_password = form.wp_admin_password.trim();
+    if (form.mysql_root_password.trim()) payload.mysql_root_password = form.mysql_root_password.trim();
+    payload.ssl_mode = form.ssl_mode;
+    if (form.ssl_mode === "cloudflare") {
+      if (form.cloudflare_zone_id.trim()) payload.cloudflare_zone_id = form.cloudflare_zone_id.trim();
+      if (form.cloudflare_api_token.trim()) payload.cloudflare_api_token = form.cloudflare_api_token.trim();
+      payload.cloudflare_dns_proxy = form.cloudflare_dns_proxy;
+    }
+    payload.wp_plugins = form.wp_plugins.length ? form.wp_plugins : null;
+    if (form.note.trim()) payload.note = form.note.trim();
     emit("updateSite", editingId.value, payload);
     return;
   }
@@ -203,8 +214,9 @@ defineExpose({ startCreate, startEdit, cancelForm });
         <fieldset><legend>{{ t("sites.sectionSSL") }}</legend>
           <label><span>{{ t("sites.sslMode") }}</span>
             <select v-model="form.ssl_mode">
-              <option value="none">{{ t("sites.sslModes.none") }}</option>
+              <option value="letsencrypt">{{ t("sites.sslModes.letsencrypt") }}</option>
               <option value="cloudflare">{{ t("sites.sslModes.cloudflare") }}</option>
+              <option value="none">{{ t("sites.sslModes.none") }}</option>
             </select>
           </label>
           <template v-if="form.ssl_mode === 'cloudflare'">
@@ -233,7 +245,7 @@ defineExpose({ startCreate, startEdit, cancelForm });
     <!-- Right: detail -->
     <section class="panel mail-list-panel">
       <template v-if="selectedSite">
-        <SiteDetailPanel :site="selectedSite" :deployments="siteDeployments" :busy="busy"
+        <SiteDetailPanel :site="selectedSite" :deployments="props.deployments" :busy="busy"
           @deploy="$emit('deploySite', $event)" @edit="startEdit($event)" @delete="deletingId = $event" />
         <div v-if="deletingId === selectedSite.id" class="delete-confirm">
           <InlineStatusNotice :title="t('sites.deleteConfirmTitle')"

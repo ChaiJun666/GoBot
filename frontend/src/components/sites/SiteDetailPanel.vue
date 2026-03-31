@@ -85,10 +85,27 @@ function formatDate(value: string | null): string {
     </button>
     <pre v-if="showLog" class="deploy-log">{{ site.deploy_log }}</pre>
   </div>
+
+  <!-- Deployment history -->
+  <div v-if="deployments.length" class="deploy-log-section">
+    <h3 style="font-size:0.8rem;font-weight:600;margin-bottom:0.5rem;">{{ t("sites.deployments") }}</h3>
+    <div class="deployment-list">
+      <div v-for="dep in deployments" :key="dep.id" class="deployment-item">
+        <span class="status-badge" :data-status="dep.status === 'completed' ? 'completed' : dep.status === 'failed' ? 'failed' : 'queued'">
+          {{ dep.status }}
+        </span>
+        <span class="job-meta">{{ formatDate(dep.created_at) }}</span>
+        <span v-if="dep.completed_at" class="job-meta">→ {{ formatDate(dep.completed_at) }}</span>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
 .deploy-log-section { margin-top: 0.75rem; }
+.deployment-list { display: flex; flex-direction: column; gap: 0.35rem; }
+.deployment-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; padding: 0.25rem 0; border-bottom: 1px solid var(--color-border); }
+.deployment-item:last-child { border-bottom: none; }
 .deploy-log {
   background: var(--color-surface,);
   border: 1px solid var(--color-border);
