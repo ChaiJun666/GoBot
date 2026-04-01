@@ -410,6 +410,27 @@ class SitesService:
                 )
                 if result.exit_status != 0:
                     raise RuntimeError(f"docker compose up failed: {result.stderr.strip()}")
+
+                # Wait a moment then verify all containers are running
+                await asyncio.sleep(5)
+                result = await conn.run(
+                    f"cd {repo_dir} && {sudo}docker compose ps --format json",
+                    check=False,
+                )
+                if result.exit_status == 0 and result.stdout.strip():
+                    for line in result.stdout.strip().splitlines():
+                        try:
+                            svc = json.loads(line)
+                            state = svc.get("State", svc.get("Status", ""))
+                            name = svc.get("Service", svc.get("Name", ""))
+                            if "exit" in state.lower() or "dead" in state.lower():
+                                logs = await conn.run(
+                                    f"cd {repo_dir} && {sudo}docker compose logs --tail 20 {name}",
+                                    check=False,
+                                )
+                                _log(f"Container {name} failed ({state}):\n{logs.stdout[-500:]}")
+                        except (json.JSONDecodeError, KeyError):
+                            pass
                 _log("Docker containers started")
 
                 # Step 9: Wait for WordPress to be ready (loop health check)
