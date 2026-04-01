@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import uuid
+from pathlib import Path
 from typing import Any
 
 import asyncssh
@@ -24,7 +25,8 @@ from app.schemas.site import (
 
 logger = logging.getLogger(__name__)
 
-_DEPLOY_REPO_URL = "https://github.com/iPythoning/wordpress-trade-starter.git"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_DOCKER_DIR = _PROJECT_ROOT / "docker"
 _DEPLOY_BASE_DIR = "/opt/sites"
 
 
@@ -245,7 +247,43 @@ class SitesService:
                         check=False,
                     )
                     if result.exit_status != 0:
-                        raise RuntimeError(f"Docker installation failed: {result.stderr.strip()}")
+                        _log("Official script failed, trying mirror installation...")
+                        if is_rhel:
+                            await conn.run(f"{sudo}yum install -y yum-utils", check=False)
+                            await conn.run(
+                                f"{sudo}yum-config-manager --add-repo "
+                                f"https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo",
+                                check=False,
+                            )
+                            result = await conn.run(
+                                f"{sudo}yum install -y docker-ce docker-ce-cli containerd.io",
+                                check=False,
+                            )
+                        else:
+                            await conn.run(f"{sudo}apt-get update -qq", check=False)
+                            await conn.run(f"{sudo}apt-get install -y ca-certificates curl", check=False)
+                            await conn.run(f"{sudo}install -m 0755 -d /etc/apt/keyrings", check=False)
+                            await conn.run(
+                                f"{sudo}curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg"
+                                f" -o /etc/apt/keyrings/docker.asc",
+                                check=False,
+                            )
+                            await conn.run(f"{sudo}chmod a+r /etc/apt/keyrings/docker.asc", check=False)
+                            await conn.run(
+                                f'echo "deb [arch=$(dpkg --print-architecture) '
+                                f'signed-by=/etc/apt/keyrings/docker.asc] '
+                                f'https://mirrors.aliyun.com/docker-ce/linux/ubuntu '
+                                f'$(. /etc/os-release && echo \\"$VERSION_CODENAME\\") stable" '
+                                f'| {sudo}tee /etc/apt/sources.list.d/docker.list > /dev/null',
+                                check=False,
+                            )
+                            await conn.run(f"{sudo}apt-get update -qq", check=False)
+                            result = await conn.run(
+                                f"{sudo}apt-get install -y docker-ce docker-ce-cli containerd.io",
+                                check=False,
+                            )
+                        if result.exit_status != 0:
+                            raise RuntimeError(f"Docker installation failed: {result.stderr.strip()}")
                     await conn.run(f"{sudo}systemctl enable docker", check=False)
                     await conn.run(f"{sudo}systemctl start docker", check=False)
                     result = await conn.run("docker --version", check=False)
@@ -269,25 +307,21 @@ class SitesService:
                 else:
                     _log(f"Docker Compose: {result.stdout.strip()}")
 
-                # Step 4: Prepare deploy directory & clone repo
+                # Step 4: Prepare deploy directory & upload files
                 _log(f"Preparing deploy directory: {deploy_dir}")
                 await conn.run(f"{sudo}mkdir -p {deploy_dir}", check=True)
                 await conn.run(f"rm -rf {repo_dir}", check=False)
-                _log("Cloning wordpress-trade-starter repository...")
-                result = await conn.run(
-                    f"git clone {_DEPLOY_REPO_URL} {repo_dir}",
-                    check=False,
-                )
-                if result.exit_status != 0:
-                    raise RuntimeError(f"git clone failed: {result.stderr.strip()}")
-                _log("Repository cloned successfully")
+                await conn.run(f"mkdir -p {repo_dir}", check=False)
 
-                # Step 5: Configure nginx domain
-                _log(f"Configuring Nginx for {domain}...")
-                await conn.run(
-                    f"sed -i 's/YOUR_DOMAIN/{domain}/g' {repo_dir}/nginx.conf",
-                    check=False,
-                )
+                _log("Uploading deployment files via SFTP...")
+                compose_content = (_DOCKER_DIR / "docker-compose.yml").read_text(encoding="utf-8")
+                nginx_content = (_DOCKER_DIR / "nginx.conf").read_text(encoding="utf-8").replace("YOUR_DOMAIN", domain)
+                async with conn.start_sftp_client() as sftp:
+                    async with sftp.open(f"{repo_dir}/docker-compose.yml", "w") as f:
+                        await f.write(compose_content)
+                    async with sftp.open(f"{repo_dir}/nginx.conf", "w") as f:
+                        await f.write(nginx_content)
+                _log("Deployment files uploaded successfully")
 
                 # Step 6: Write .env file
                 env_content = (
@@ -341,7 +375,34 @@ class SitesService:
                 elif result.exit_status == 0:
                     _log("SSL certificate already exists")
 
-                # Step 8: Docker compose up
+                # Ensure SSL files exist (nginx won't start without them)
+                result = await conn.run(f"test -f {ssl_dir}/fullchain.pem", check=False)
+                if result.exit_status != 0:
+                    _log("Generating self-signed certificate as fallback...")
+                    await conn.run(
+                        f"openssl req -x509 -nodes -days 365 "
+                        f"-newkey rsa:2048 "
+                        f"-keyout {ssl_dir}/privkey.pem "
+                        f"-out {ssl_dir}/fullchain.pem "
+                        f'-subj "/CN={domain}"',
+                        check=False,
+                    )
+                    _log("Self-signed certificate generated")
+
+                # Step 8: Configure Docker mirror (China servers)
+                daemon_json = "/etc/docker/daemon.json"
+                result = await conn.run(f"test -f {daemon_json}", check=False)
+                if result.exit_status != 0:
+                    _log("Configuring Docker registry mirror...")
+                    mirror_config = '{"registry-mirrors": ["https://mirror.ccs.tencentyun.com", "https://docker.m.daocloud.io"]}'
+                    await conn.run(
+                        f"echo '{mirror_config}' | {sudo}tee {daemon_json} > /dev/null",
+                        check=False,
+                    )
+                    await conn.run(f"{sudo}systemctl restart docker", check=False)
+                    _log("Docker mirror configured")
+
+                # Step 9: Docker compose up
                 _log("Starting Docker containers...")
                 result = await conn.run(
                     f"cd {repo_dir} && {sudo}docker compose up -d",

@@ -265,7 +265,15 @@ defineExpose({ startCreate, startEdit, cancelForm });
 </template>
 
 <style scoped>
-.plugin-grid { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; }
+.plugin-grid { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.plugin-grid .checkbox-label {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: 0.75rem; cursor: pointer;
+  padding: 0.2rem 0.5rem; border-radius: 4px;
+  border: 1px solid var(--color-border); background: var(--color-surface);
+  transition: border-color 0.15s;
+}
+.plugin-grid .checkbox-label:hover { border-color: var(--color-primary); }
 .checkbox-label { display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; cursor: pointer; }
 .delete-confirm { margin-top: 1rem; }
 .danger-ghost { color: var(--color-danger); }
