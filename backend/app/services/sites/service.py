@@ -144,12 +144,117 @@ class SitesService:
             raise RuntimeError("Failed to retrieve updated site")
         return SiteSummary.from_record(updated)
 
-    def delete_site(self, site_id: str) -> None:
+    async def _undeploy(self, site_id: str) -> None:
+        """Clean up remote server resources for a deployed site (best-effort)."""
+        record = self._db.get_site(site_id)
+        if record is None:
+            return
+
+        slug = record["slug"]
+        domain = record["domain"]
+        server_ip = record["server_ip"]
+        ssh_user = record["ssh_user"]
+        ssh_password = self._cipher.decrypt(record["encrypted_ssh_password"])
+        ssl_mode = record["ssl_mode"]
+
+        deploy_dir = f"{_DEPLOY_BASE_DIR}/{slug}"
+        repo_dir = f"{deploy_dir}/wordpress-trade-starter"
+
+        try:
+            async with asyncssh.connect(
+                host=server_ip,
+                username=ssh_user,
+                password=ssh_password,
+                known_hosts=None,
+            ) as conn:
+                result = await conn.run("id -u", check=False)
+                is_root = result.stdout.strip() == "0"
+                sudo = "" if is_root else "sudo "
+
+                # 1. Stop containers and remove volumes
+                logger.info("[undeploy:%s] Stopping containers...", slug)
+                result = await conn.run(
+                    f"cd {repo_dir} && {sudo}docker compose down -v",
+                    check=False,
+                )
+                if result.exit_status == 0:
+                    logger.info("[undeploy:%s] Containers and volumes removed", slug)
+                else:
+                    logger.warning("[undeploy:%s] docker compose down failed: %s", slug, result.stderr.strip()[:200])
+
+                # 2. Remove deploy directory
+                logger.info("[undeploy:%s] Removing deploy directory...", slug)
+                await conn.run(f"{sudo}rm -rf {deploy_dir}", check=False)
+
+                # 3. Remove Let's Encrypt certificate
+                logger.info("[undeploy:%s] Removing SSL certificate...", slug)
+                await conn.run(
+                    f"{sudo}certbot delete --cert-name {domain} --non-interactive",
+                    check=False,
+                )
+
+                # 4. Remove cron entry containing this domain
+                result = await conn.run("crontab -l 2>/dev/null || true", check=False)
+                if result.exit_status == 0 and result.stdout.strip():
+                    lines = result.stdout.strip().splitlines()
+                    filtered = [l for l in lines if domain not in l and repo_dir not in l]
+                    if len(filtered) < len(lines):
+                        new_cron = "\n".join(filtered) + "\n"
+                        await conn.run(
+                            f"echo '{new_cron}' | {sudo}crontab -",
+                            check=False,
+                        )
+                        logger.info("[undeploy:%s] Cron entry removed", slug)
+        except Exception as exc:
+            logger.warning("[undeploy:%s] SSH cleanup failed: %s", slug, exc)
+
+        # 5. Remove Cloudflare DNS record (outside SSH)
+        if ssl_mode == "cloudflare" and record.get("encrypted_cloudflare_api_token") and record.get("cloudflare_zone_id"):
+            try:
+                cf_token = self._cipher.decrypt(record["encrypted_cloudflare_api_token"])
+                cf_zone = record["cloudflare_zone_id"]
+                await self._remove_cloudflare_dns(cf_token, cf_zone, domain)
+            except Exception as exc:
+                logger.warning("[undeploy:%s] Cloudflare DNS cleanup failed: %s", slug, exc)
+
+    async def _remove_cloudflare_dns(
+        self,
+        api_token: str,
+        zone_id: str,
+        domain: str,
+    ) -> None:
+        base_url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                base_url,
+                params={"name": domain, "type": "A"},
+                headers=headers,
+            )
+            existing = resp.json().get("result", [])
+            for rec in existing:
+                await client.delete(f"{base_url}/{rec['id']}", headers=headers)
+                logger.info("[undeploy] Cloudflare DNS A record deleted: %s", rec["name"])
+
+    async def delete_site(self, site_id: str) -> None:
         record = self._db.get_site(site_id)
         if record is None:
             raise LookupError(f"Site {site_id} not found")
         if record["status"] == SiteStatus.DEPLOYING.value:
             raise RuntimeError("Cannot delete a site while it is deploying")
+
+        # If site was ever deployed, clean up remote resources first
+        deployed_statuses = {
+            SiteStatus.RUNNING.value,
+            SiteStatus.STOPPED.value,
+            SiteStatus.ERROR.value,
+        }
+        if record["status"] in deployed_statuses:
+            await self._undeploy(site_id)
+
         self._db.delete_site(site_id)
 
     # -- Deploy --

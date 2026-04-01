@@ -438,6 +438,8 @@ export const enMessages = {
     confirmDelete: "Confirm",
     deleteConfirmTitle: "Confirm deletion",
     deleteConfirmDescription: "This will permanently remove site \"{name}\" and all deployment records.",
+    deleteConfirmDeployedDescription: "This will permanently remove site \"{name}\" and clean up server resources (containers, data volumes, SSL certificates, cron jobs, DNS records). This action cannot be undone.",
+    undeploying: "Cleaning up server resources...",
     noSitesTitle: "No sites yet.",
     noSitesDescription: "Add a site to configure and deploy a WordPress independent store.",
     selectSiteTitle: "Select a site.",

@@ -430,6 +430,8 @@ export const zhCnMessages = {
     confirmDelete: "确认删除",
     deleteConfirmTitle: "确认删除",
     deleteConfirmDescription: "将永久删除站点「{name}」及其所有部署记录，此操作不可撤销。",
+    deleteConfirmDeployedDescription: "将永久删除站点「{name}」，并清理服务器上的容器、数据卷、SSL 证书、定时任务、DNS 记录等资源，此操作不可撤销。",
+    undeploying: "正在清理服务器资源...",
     noSitesTitle: "还没有站点。",
     noSitesDescription: "添加一个站点以配置和部署 WordPress 独立站。",
     selectSiteTitle: "请选择一个站点。",

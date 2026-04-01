@@ -146,6 +146,10 @@ function togglePlugin(slug: string) {
   else form.wp_plugins.push(slug);
 }
 
+function isDeployedSite(site: SiteSummary) {
+  return ["running", "stopped", "error"].includes(site.status);
+}
+
 function doDelete() {
   if (deletingId.value) { emit("deleteSite", deletingId.value); deletingId.value = null; }
 }
@@ -242,19 +246,25 @@ defineExpose({ startCreate, startEdit, cancelForm });
       </form>
     </section>
 
+    <!-- Delete confirmation modal -->
+    <div v-if="deletingId" class="modal-backdrop" @click.self="deletingId = null">
+      <div class="modal-dialog">
+        <h3>{{ t("sites.deleteConfirmTitle") }}</h3>
+        <p class="modal-detail">{{ isDeployedSite(selectedSite!) ? t('sites.deleteConfirmDeployedDescription', { name: selectedSite!.display_name }) : t('sites.deleteConfirmDescription', { name: selectedSite!.display_name }) }}</p>
+        <div class="modal-actions">
+          <button class="action-button danger-button" type="button" :disabled="busy" @click="doDelete">
+            {{ busy ? t("sites.undeploying") : t("sites.confirmDelete") }}
+          </button>
+          <button class="ghost-button" type="button" @click="deletingId = null">{{ t("actions.cancel") }}</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Right: detail -->
     <section class="panel mail-list-panel">
       <template v-if="selectedSite">
         <SiteDetailPanel :site="selectedSite" :deployments="props.deployments" :busy="busy"
           @deploy="$emit('deploySite', $event)" @edit="startEdit($event)" @delete="deletingId = $event" />
-        <div v-if="deletingId === selectedSite.id" class="delete-confirm">
-          <InlineStatusNotice :title="t('sites.deleteConfirmTitle')"
-            :detail="t('sites.deleteConfirmDescription', { name: selectedSite.display_name })" tone="warning" />
-          <div class="panel-actions" style="margin-top:0.5rem">
-            <button class="action-button" type="button" @click="doDelete">{{ t("sites.confirmDelete") }}</button>
-            <button class="ghost-button" type="button" @click="deletingId = null">{{ t("actions.close") }}</button>
-          </div>
-        </div>
       </template>
       <div v-else class="empty-state compact-empty">
         <p>{{ t("sites.selectSiteTitle") }}</p>
@@ -276,6 +286,21 @@ defineExpose({ startCreate, startEdit, cancelForm });
 .plugin-grid .checkbox-label:hover { border-color: var(--color-primary); }
 .checkbox-label { display: flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; cursor: pointer; }
 .delete-confirm { margin-top: 1rem; }
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.35); backdrop-filter: blur(4px);
+}
+.modal-dialog {
+  background: var(--color-surface); border-radius: 12px;
+  padding: 1.5rem; max-width: 420px; width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+.modal-dialog h3 { margin: 0 0 0.75rem; font-size: 1rem; }
+.modal-detail { font-size: 0.85rem; color: var(--ink); margin: 0 0 1rem; line-height: 1.5; }
+.modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+.danger-button { background: var(--color-danger); color: white; border-color: var(--color-danger); }
+.danger-button:hover { opacity: 0.9; }
 .danger-ghost { color: var(--color-danger); }
 .danger-ghost:hover { background: var(--color-danger); color: white; }
 fieldset { border: none; padding: 0; margin: 0 0 0.5rem; }

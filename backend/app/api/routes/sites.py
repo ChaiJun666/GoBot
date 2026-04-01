@@ -52,7 +52,7 @@ async def update_site(site_id: str, payload: UpdateSiteRequest, request: Request
 @router.delete("/{site_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_site(site_id: str, request: Request) -> None:
     try:
-        _get_service(request).delete_site(site_id)
+        await _get_service(request).delete_site(site_id)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except RuntimeError as exc:
